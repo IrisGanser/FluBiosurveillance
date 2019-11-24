@@ -3,6 +3,9 @@ library(plyr)
 library(readxl)
 library(dplyr)
 library(lubridate)
+library(plotly)
+library(htmlwidgets)
+# library(hrbrthemes)
 
 # 24 countries
 ## load data
@@ -56,10 +59,11 @@ dataHM <- dataHM[!duplicated(dataHM$alert_id), ]
 # summarize into weekly counts and filter out overseas territories
 overseas_territories <- c("Bermuda [UK]", "CollectivitÃ© d'outre-mer de Saint BarthÃ©lemy, France", "Cayman Islands [UK]", 
                           "Pays d'outre-mer de French Polynesia, France", "RÃ©gion d'outre-mer de Mayotte, France", 
-                          "RÃ©gion d'outre-mer de French Guiana, France", "RÃ©gion d'outre-mer de RÃ©union, France")
+                          "RÃ©gion d'outre-mer de French Guiana, France", "RÃ©gion d'outre-mer de RÃ©union, France", 
+                          "RÃ©gion d'outre-mer de Guadeloupe")
 
 # barplot of healthmap event counts in total over 5 years
-dataHM <- filter(dataHM, !(country %in% overseas_territories))
+dataHM <- filter(dataHM, !(country %in% overseas_territories | place_name %in% overseas_territories))
 dataHM$country <- factor(dataHM$country)
 
 ggplot(dataHM, aes(x = country)) + 
@@ -89,15 +93,20 @@ dateArg <- c(HM_byweek_Arg$date, FluNet_data_Arg$SDATE)
 
 temp_data_Arg <- data.frame(dateArg, countryArg, countsArg, sourceArg) %>% filter(dateArg < "2019-06-30")
 
-ggplot(temp_data_Arg, aes(x = dateArg, y = countsArg)) + 
-  geom_line() + 
+p <- ggplot(temp_data_Arg, aes(x = dateArg, y = countsArg)) + 
+  geom_area(fill="#69b3a2", alpha=0.5) +
+  geom_line(color="#69b3a2", size = 1) + 
   facet_wrap(facets = ~sourceArg, nrow = 2, scales = "free_y", strip.position = "left", 
              labeller = as_labeller(c(HealthMap = "HealthMap events", WHO = "WHO counts"))) +
   ylab(NULL) +
   theme(strip.background = element_blank(), strip.placement = "outside") + 
   labs(title = "Argentina comparison of HealthMap and WHO counts", caption = "Cor = 0.573") + 
   scale_x_datetime(date_labels = "%b %Y", date_breaks = "12 months") + 
-  xlab("")
+  xlab("") 
+p 
+p_ggplotly <- ggplotly(p)
+p_ggplotly
+
 
 cor(temp_data_Arg$countsArg[1:339], temp_data_Arg$countsArg[340:678], method = "spearman")
 plot(temp_data_Arg$countsArg[1:339], temp_data_Arg$countsArg[340:678])
