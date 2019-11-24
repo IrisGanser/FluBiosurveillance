@@ -60,7 +60,7 @@ dataHM <- dataHM[!duplicated(dataHM$alert_id), ]
 overseas_territories <- c("Bermuda [UK]", "CollectivitÃ© d'outre-mer de Saint BarthÃ©lemy, France", "Cayman Islands [UK]", 
                           "Pays d'outre-mer de French Polynesia, France", "RÃ©gion d'outre-mer de Mayotte, France", 
                           "RÃ©gion d'outre-mer de French Guiana, France", "RÃ©gion d'outre-mer de RÃ©union, France", 
-                          "RÃ©gion d'outre-mer de Guadeloupe, France")
+                          "RÃ©gion d'outre-mer de Guadeloupe, France", "RÃ©gion d'outre-mer de Martinique, France")
 
 # barplot of healthmap event counts in total over 5 years
 dataHM <- filter(dataHM, !(country %in% overseas_territories | place_name %in% overseas_territories))
