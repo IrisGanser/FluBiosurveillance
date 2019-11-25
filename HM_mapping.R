@@ -10,6 +10,8 @@ library(lubridate)
 library(rnaturalearth)
 library(rnaturalearthdata)
 library(rgeos)
+library(RColorBrewer)
+
 
 setwd("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/FluNet")
 
@@ -36,15 +38,17 @@ dataHM <- filter(dataHM, !(country %in% overseas_territories | place_name %in% o
 dataHM$country <- factor(dataHM$country)
 
 # make locations ready fror plotting
-locations_sf <- st_as_sf(dataHM, coords = c("lon", "lat"), crs = 4326)
-mapview(locations_sf, cex = 3)
+HM_events_sf <- st_as_sf(dataHM, coords = c("lon", "lat"), crs = 4326)
+mapview <- mapview(HM_events_sf, cex = 3)
+mapview
+# mapshot(mapview, url = "HMevents_map.html", selfcontained = FALSE)
+# mapshot(mapview, file = "HMevents_map.png", remove_controls = c("zoomControl", "layersControl", "homeButton"), selfcontained = FALSE)
 
 
 
-countries_sp <- ne_countries(scale = "medium")
-
-
-coords <- select(dataHM, lon, lat)
+## make a map with sp package - obsolete 
+#countries_sp <- ne_countries(scale = "medium")
+#coords <- select(dataHM, lon, lat)
 
 # Create SpatialPoints object with coords and CRS
 #points_sp <- SpatialPoints(coords = coords,
@@ -60,10 +64,29 @@ coords <- select(dataHM, lon, lat)
 
 
 countries_sf <- ne_countries(scale = "medium", returnclass = "sf")
-plot(countries_sf)
-plot(locations_sf)
+plot(countries_sf["iso_a3"], axes = TRUE, main = "")
+
 
 ggplot() +
-  geom_sf(data = countries_sf) +
-  geom_sf(data = locations_sf, alpha = 0.5, col = "darkgreen") +
-  labs(title = "HealthMap events from 2013 - 2019")
+  geom_sf(data = countries_sf, aes(fill = region_un), alpha = 0.8) +
+  geom_sf(data = HM_events_sf, alpha = 0.5, col = "black") +
+  labs(title = "HealthMap events from 2013 - 2019", fill = "UN region") + 
+  theme(legend.position = "bottom")
+
+
+influenza_zones <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/InfluenzaTransmissionZones.csv", header = TRUE, sep = ";") %>%
+  subset(select = 1:3)
+
+countries_sf <- left_join(countries_sf, influenza_zones, by = c("iso_a3" = "ISO"))
+
+countries_sf$geounit[which(is.na(countries_sf$influenza_transmission_zone))]
+countries_sf$influenza_transmission_zone[which(is.na(countries_sf$influenza_transmission_zone))] <- c("Oceania Melanesia and Polynesia", 
+                                                                                                      "Western Asia", "South Asia", "South Asia", 
+                                                                                                      "Eastern Europe", "Eastern Africa")
+
+
+ggplot() +
+  geom_sf(data = countries_sf, aes(fill = influenza_transmission_zone), alpha = 0.8) +
+  geom_sf(data = HM_events_sf, alpha = 0.5, col = "black") +
+  labs(title = "HealthMap events from 2013 - 2019", fill = "Influenza transmission zone") + 
+  theme(legend.position = "bottom")
