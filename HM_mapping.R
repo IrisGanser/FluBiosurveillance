@@ -67,26 +67,44 @@ countries_sf <- ne_countries(scale = "medium", returnclass = "sf")
 plot(countries_sf["iso_a3"], axes = TRUE, main = "")
 
 
-ggplot() +
-  geom_sf(data = countries_sf, aes(fill = region_un), alpha = 0.8) +
-  geom_sf(data = HM_events_sf, alpha = 0.5, col = "black") +
-  labs(title = "HealthMap events from 2013 - 2019", fill = "UN region") + 
-  theme(legend.position = "bottom")
+#ggplot() +
+ # geom_sf(data = countries_sf, aes(fill = region_un), alpha = 0.8) +
+  #geom_sf(data = HM_events_sf, alpha = 0.5, col = "black") +
+  #labs(title = "HealthMap events from 2013 - 2019", fill = "UN region") + 
+  #theme(legend.position = "bottom")
 
 
-influenza_zones <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/InfluenzaTransmissionZones.csv", header = TRUE, sep = ";") %>%
-  subset(select = 1:3)
+influenza_zones <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/InfluenzaTransmissionZones.csv", header = TRUE, sep = ";", 
+                            stringsAsFactors = FALSE) %>% subset(select = 1:3)
+influenza_zones$influenza_transmission_zone <- as.factor(influenza_zones$influenza_transmission_zone)
 
 countries_sf <- left_join(countries_sf, influenza_zones, by = c("iso_a3" = "ISO"))
 
 countries_sf$geounit[which(is.na(countries_sf$influenza_transmission_zone))]
 countries_sf$influenza_transmission_zone[which(is.na(countries_sf$influenza_transmission_zone))] <- c("Oceania Melanesia and Polynesia", 
-                                                                                                      "Western Asia", "South Asia", "South Asia", 
+                                                                                                      "Western Asia", "Southern Asia", "Southern Asia", 
                                                                                                       "Eastern Europe", "Eastern Africa")
+countries_sf$influenza_transmission_zone[which(countries_sf$influenza_transmission_zone == "Antarctica (none)")] <- NA
 
+
+colourCount = length(levels(countries_sf$influenza_transmission_zone))
+getPalette = colorRampPalette(brewer.pal(19, "Set1"))
 
 ggplot() +
   geom_sf(data = countries_sf, aes(fill = influenza_transmission_zone), alpha = 0.8) +
+  scale_fill_manual(values = getPalette(colourCount)) +
   geom_sf(data = HM_events_sf, alpha = 0.5, col = "black") +
-  labs(title = "HealthMap events from 2013 - 2019", fill = "Influenza transmission zone") + 
-  theme(legend.position = "bottom")
+  labs(title = "Spatial distribution of HealthMap events from 2013 - 2019", fill = "Influenza transmission zone") + 
+  theme(legend.position = "bottom", plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+
+#ggsave(filename = "mapHM_CBSet1.png", scale = 1.5)
+  
+
+ggplot() +
+  geom_sf(data = countries_sf, aes(fill = influenza_transmission_zone), alpha = 0.8) +
+  #scale_fill_manual(values = getPalette(colourCount)) +
+  geom_sf(data = HM_events_sf, alpha = 0.5, col = "black") +
+  labs(title = "Spatial distribution of HealthMap events from 2013 - 2019", fill = "Influenza transmission zone") + 
+  theme(legend.position = "bottom", plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+
+#ggsave(filename = "mapHM_defaultcol.png", scale = 1.5)
