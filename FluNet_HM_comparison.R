@@ -17,7 +17,7 @@ country_code <- c("Arg", "Aus", "Bra", "Bul", "Chn", "Cri", "Ecu", "Egy", "Fra",
                   "Ind", "Irn", "Mex", "Nig", "Rus", "Sau", "Swe", "Tha", "Ury", "Usa", "Vnm", "Zaf")
 FluNet_data$Country <- revalue(FluNet_data$Country, c("Iran (Islamic Republic of)" = "Iran", "Russian Federation" = "Russia", 
                                                 "United Kingdom of Great Britain and Northern Ireland" = "United Kingdom",
-                                                "Viet Nam" = "Vietnam"))
+                                                "United States of America" = "United States", "Viet Nam" = "Vietnam"))
 
 str(FluNet_data)
 
@@ -39,28 +39,41 @@ for (i in seq_along(country_list)) {
     geom_line(aes(y = INF_B, col = "Influenza B")) +
     scale_color_discrete(name = "")
   print(plot)
-  ggsave(plot = plot, file = paste("WHO FluNet plot", country_list[i], ".jpeg", sep=' '))
+  #ggsave(plot = plot, file = paste("WHO FluNet plot", country_list[i], ".jpeg", sep=' '))
 }
 
 # load HealthMap data
-dataHM <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/mcgill flu iris 20190711144158.csv", header = F)
-colnames(dataHM) <- c("place_name", "country", "disease_name", "species_name", "alert_id", "summary", "href", "issue_date", "load_date",   
-                      "smooshed", "descr", "long_name", "lon", "lat")
+dataHM1 <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/mcgill flu iris 20190711144158.csv", header = F, 
+                    stringsAsFactors = F)
+colnames(dataHM1) <- c("place_name", "country", "disease_name", "species_name", "alert_id", "Headline", "Link", 
+                       "issue_date", "load_date", "Snippet", "Tag", "Source", "lon", "lat")
+dataHM1 <- dataHM1 %>% select(-species_name)
+dataHM1$load_date <- as.POSIXct(dataHM1$load_date, format="%Y-%m-%d %H:%M:%S")
+dataHM1$issue_date <- as.POSIXct(dataHM1$issue_date, format="%Y-%m-%d %H:%M:%S")
+dataHM1 <- dataHM1[!duplicated(dataHM1$alert_id), ]
+
+dataHM2 <- read_excel("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/mcgill flu iris 20191212113549.xlsx")
+dataHM2 <- dataHM2 %>% select(-Language)
+colnames(dataHM2) <- c("place_name", "country", "disease_name", "alert_id", "Headline", "Link", 
+                       "issue_date", "load_date", "Snippet", "Tag", "Source", "lon", "lat")
+dataHM2 <- filter(dataHM2, disease_name != "Respiratory Illness")
+dataHM2$load_date <- as.POSIXct(dataHM2$load_date, format="%Y-%m-%d %H:%M:%S", tz = "GMT")
+dataHM2$issue_date <- as.POSIXct(dataHM2$issue_date, format="%Y-%m-%d %H:%M:%S", tz = "GMT")
+dataHM2 <- dataHM2[!duplicated(dataHM2$alert_id), ]
+
+
+dataHM <- rbind(dataHM1, dataHM2) 
 
 dataHM$country <- as.factor(dataHM$country)
-dataHM$long_name <- as.factor(dataHM$long_name)
-dataHM$load_date <- as.POSIXct(dataHM$load_date)
-dataHM$issue_date <- as.POSIXct(dataHM$issue_date)
+dataHM$Source <- as.factor(dataHM$Source)
 
-
-# de-duplication based on alert IDs
-dataHM <- dataHM[!duplicated(dataHM$alert_id), ]
 
 # summarize into weekly counts and filter out overseas territories
 overseas_territories <- c("Bermuda [UK]", "CollectivitÃ© d'outre-mer de Saint BarthÃ©lemy, France", "Cayman Islands [UK]", 
                           "Pays d'outre-mer de French Polynesia, France", "RÃ©gion d'outre-mer de Mayotte, France", 
                           "RÃ©gion d'outre-mer de French Guiana, France", "RÃ©gion d'outre-mer de RÃ©union, France", 
-                          "RÃ©gion d'outre-mer de Guadeloupe, France", "RÃ©gion d'outre-mer de Martinique, France")
+                          "RÃ©gion d'outre-mer de Guadeloupe, France", "RÃ©gion d'outre-mer de Martinique, France", 
+                          "American Samoa [USA]", "Northern Mariana Islands [United States]", "Guam [USA]")
 
 # barplot of healthmap event counts in total over 5 years
 dataHM <- filter(dataHM, !(country %in% overseas_territories | place_name %in% overseas_territories))
@@ -72,7 +85,9 @@ ggplot(dataHM, aes(x = country)) +
   labs(title = "Total number of HealthMap events from January 2013 - July 2019", x = "") + 
   coord_flip() +
   scale_x_discrete(limits = rev(levels(dataHM$country))) + 
-  scale_y_continuous(limits = c(0, 4010))
+  scale_y_continuous(limits = c(0, 9300))
+
+#ggsave("HM total counts.jpeg")
 
 
 # summarize into weekly data
@@ -157,14 +172,16 @@ for (i in seq_along(country_list)) {
                labeller = as_labeller(c(HealthMap = "HealthMap events", WHO = "WHO counts"))) +
     ylab(NULL) +
     theme(strip.background = element_blank(), strip.placement = "outside") + 
-    labs(title = paste("Comparison of HealthMap and WHO counts for", country_list[i], sep = " "), 
-         caption = paste("Cor =", cor.value[i], sep = " ")) + 
+    labs(title = paste("Comparison of HealthMap and WHO counts for", country_list[i], sep = " ")) +
     scale_x_datetime(date_labels = "%b %Y", date_breaks = "12 months") + 
     xlab("")
+    #labs(title = paste("Comparison of HealthMap and WHO counts for", country_list[i], sep = " "), 
+         #caption = paste("Cor =", cor.value[i], sep = " ")) + 
+    
   
   print(plot)
   
-  # ggsave(plot = plot, file = paste("WHO HM comparison", country_list[i], ".jpeg", sep=' '))
+  #ggsave(plot = plot, file = paste("WHO HM comparison", country_list[i], ".jpeg", sep=' '))
 }
 
 
