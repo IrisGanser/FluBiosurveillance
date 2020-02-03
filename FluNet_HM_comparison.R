@@ -39,7 +39,7 @@ for (i in seq_along(country_list)) {
     geom_line(aes(y = INF_B, col = "Influenza B")) +
     scale_color_discrete(name = "")
   print(plot)
-  #ggsave(plot = plot, file = paste("WHO FluNet plot", country_list[i], ".jpeg", sep=' '))
+  ggsave(plot = plot, file = paste("WHO FluNet plot", country_list[i], ".jpeg", sep=' '))
 }
 
 # load HealthMap data
@@ -156,7 +156,7 @@ cor.value
 
 
 for (i in seq_along(country_list)) { 
-  FluNet_data_temp <- subset(FluNet_data, FluNet_data$Country==country_list[i])
+  FluNet_data_temp <- subset(FluNet_data, FluNet_data$Country==country_list[i] & FluNet_data$SDATE <= "2019-07-07")
   HM_byweek_temp <- subset(HM_byweek, HM_byweek$country==country_list[i])
   
   counts_temp <- c(HM_byweek_temp$counts, FluNet_data_temp$ALL_INF)
@@ -181,7 +181,7 @@ for (i in seq_along(country_list)) {
   
   print(plot)
   
-  #ggsave(plot = plot, file = paste("WHO HM comparison", country_list[i], ".jpeg", sep=' '))
+  #ggsave(plot = plot, file = paste("FluNet HM comparison", country_list[i], ".jpeg", sep=' '))
 }
 
 
