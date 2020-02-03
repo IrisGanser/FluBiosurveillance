@@ -102,7 +102,7 @@ HM_byweek$country <- factor(HM_byweek$country)
 FluNet_data_Arg <- filter(FluNet_data, Country == "Argentina")
 HM_byweek_Arg <- filter(HM_byweek, country == "Argentina")
 countsArg <- c(HM_byweek_Arg$counts, FluNet_data_Arg$ALL_INF)
-sourceArg <- c(rep("HealthMap", nrow(HM_byweek_Arg)), rep("WHO", nrow(FluNet_data_Arg)))
+sourceArg <- c(rep("HealthMap", nrow(HM_byweek_Arg)), rep("FluNet", nrow(FluNet_data_Arg)))
 countryArg <- rep("Argentina", nrow(HM_byweek_Arg) + nrow(FluNet_data_Arg))
 dateArg <- c(HM_byweek_Arg$date, FluNet_data_Arg$SDATE)
 
@@ -112,10 +112,10 @@ p <- ggplot(temp_data_Arg, aes(x = dateArg, y = countsArg)) +
   geom_area(fill="#69b3a2", alpha=0.5) +
   geom_line(color="#69b3a2", size = 1) + 
   facet_wrap(facets = ~sourceArg, nrow = 2, scales = "free_y", strip.position = "left", 
-             labeller = as_labeller(c(HealthMap = "HealthMap events", WHO = "WHO counts"))) +
+             labeller = as_labeller(c(HealthMap = "HealthMap events", FluNet = "FluNet counts"))) +
   ylab(NULL) +
   theme(strip.background = element_blank(), strip.placement = "outside") + 
-  labs(title = "Argentina comparison of HealthMap and WHO counts", caption = "Cor = 0.573") + 
+  labs(title = "Argentina comparison of HealthMap and FluNet counts", caption = "Cor = 0.573") + 
   scale_x_datetime(date_labels = "%b %Y", date_breaks = "12 months") + 
   xlab("") 
 p 
@@ -160,7 +160,7 @@ for (i in seq_along(country_list)) {
   HM_byweek_temp <- subset(HM_byweek, HM_byweek$country==country_list[i])
   
   counts_temp <- c(HM_byweek_temp$counts, FluNet_data_temp$ALL_INF)
-  source_temp <- c(rep("HealthMap", nrow(HM_byweek_temp)), rep("WHO", nrow(FluNet_data_temp)))
+  source_temp <- c(rep("HealthMap", nrow(HM_byweek_temp)), rep("FluNet", nrow(FluNet_data_temp)))
   country_temp <- rep(country_list[i], nrow(HM_byweek_temp) + nrow(FluNet_data_temp))
   date_temp <- c(HM_byweek_temp$date, FluNet_data_temp$SDATE)
   
@@ -169,10 +169,10 @@ for (i in seq_along(country_list)) {
   plot <- ggplot(temp_df, aes(x = date_temp, y = counts_temp)) + 
     geom_line() + 
     facet_wrap(facets = ~source_temp, nrow = 2, scales = "free_y", strip.position = "left", 
-               labeller = as_labeller(c(HealthMap = "HealthMap events", WHO = "WHO counts"))) +
+               labeller = as_labeller(c(HealthMap = "HealthMap events", FluNet = "FluNet counts"))) +
     ylab(NULL) +
     theme(strip.background = element_blank(), strip.placement = "outside") + 
-    labs(title = paste("Comparison of HealthMap and WHO counts for", country_list[i], sep = " ")) +
+    labs(title = paste("Comparison of HealthMap and FluNet counts for", country_list[i], sep = " ")) +
     scale_x_datetime(date_labels = "%b %Y", date_breaks = "12 months") + 
     xlab("")
     #labs(title = paste("Comparison of HealthMap and WHO counts for", country_list[i], sep = " "), 
@@ -183,7 +183,5 @@ for (i in seq_along(country_list)) {
   
   #ggsave(plot = plot, file = paste("WHO HM comparison", country_list[i], ".jpeg", sep=' '))
 }
-
-
 
 
