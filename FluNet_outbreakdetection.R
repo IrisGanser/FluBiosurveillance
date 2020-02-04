@@ -168,3 +168,31 @@ plot(USA_outbreak_rki1)
 
 
 # boda algorithm 
+
+control_boda <- list(range = 1:length(observed(USA_sts)), X = NULL, season = FALSE, prior = "iid", alpha = 0.05, samplingMethod = "marginals")
+# USA_outbreak_boda <- boda(USA_sts, control = control_boda)
+plot(USA_outbreak_boda)
+#took forever to calculate although the number of generated samples was very low
+
+
+# Neuzil method (weeks with > 1% of annual positive tests) and Izurieta method (weeks with > 5% of annual positive tests))
+years <- 2012:2020
+FluNet_USA$season <- cut(FluNet_USA$SDATE, 
+                         breaks=as.POSIXct(paste(years,"-07-01",sep="")),
+                         labels=paste(years[-length(years)],years[-length(years)]+1,sep="/"))
+FluNet_USA <- FluNet_USA %>%  group_by(season) %>% mutate(annual_flu_pos = sum(ALL_INF)) %>% ungroup()
+FluNet_USA <- FluNet_USA %>% mutate(perc_flu_pos = ALL_INF/annual_flu_pos, Neuzil = ifelse(perc_flu_pos > 0.01, TRUE, FALSE), 
+                                    Izurieta = ifelse(perc_flu_pos > 0.05, TRUE, FALSE)) 
+FluNet_USA <- FluNet_USA %>% mutate(Neuzil_case_limit = annual_flu_pos*0.01, Izurieta_case_limit = annual_flu_pos * 0.05)
+
+ggplot(data = FluNet_USA, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line() +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for USA with Neuzil outbreak limit", 
+       caption = "Neuzil outbreak limit is weeks with > 1% of annual positive tests") +
+  geom_line(aes(x = SDATE, y = Neuzil_case_limit), col = "red", lty = 2) 
+
+FluNet_data$season <- cut(FluNet_data$SDATE, 
+                          breaks=as.POSIXct(paste(years,"-07-01",sep="")),
+                          labels=paste(years[-length(years)],years[-length(years)]+1,sep="/"))
+# alerts very late, problem with missing data in non-epidemic season and multi-country scale
