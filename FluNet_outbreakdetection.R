@@ -5,6 +5,7 @@ library(ggplot2)
 library(MASS)
 library(dplyr)
 library(msm)
+library(qcc)
 
 # load FluNet data
 setwd("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/FluNet")
@@ -175,6 +176,17 @@ plot(USA_outbreak_boda)
 #took forever to calculate although the number of generated samples was very low
 
 
+#outbreakP algorithm (apparently especially suited for influenza outbreak detection)
+FluNet_USA_2013 <- filter(FluNet_USA, SDATE > "2013-04-01" & SDATE < "2014-01-01") %>% select(c(SDATE, ALL_INF))
+USA_2013_sts <- sts(observed = FluNet_USA_2013$ALL_INF, epochAsDate = FALSE, start = c(2013, 4), frequency = 52)
+
+USA_2013_outbreakP <- outbreakP(USA_2013_sts, control = list(
+  range = 1:length(observed(USA_2013_sts)), k = 100, ret = "cases"
+))
+plot(USA_2013_outbreakP)
+
+
+
 # Neuzil method (weeks with > 1% of annual positive tests) and Izurieta method (weeks with > 5% of annual positive tests))
 years <- 2012:2020
 FluNet_USA$season <- cut(FluNet_USA$SDATE, 
@@ -196,3 +208,20 @@ FluNet_data$season <- cut(FluNet_data$SDATE,
                           breaks=as.POSIXct(paste(years,"-07-01",sep="")),
                           labels=paste(years[-length(years)],years[-length(years)]+1,sep="/"))
 # alerts very late, problem with missing data in non-epidemic season and multi-country scale
+
+
+# EWMA chart
+USA_ewma <- ewma(FluNet_USA$ALL_INF, lambda = 0.3, nsigmas = 3)
+summary(USA_ewma)
+# threshold for outbreak detection is way too high. 
+# Somehow, the threshold must be brought down! Take only non-epidemic period for baseline calculation?
+
+# calculate mean and standard deviation during non-epidemic period (May-October for temperate regions in Northern hemisphere)
+FluNet_USA_nep <- filter(FluNet_USA, month(FluNet_USA$SDATE) %in% 5:10)
+USA_meancount_nep <- mean(FluNet_USA_nep$ALL_INF)
+USA_sdcount_nep <- sd(FluNet_USA_nep$ALL_INF)
+
+# new EWMA chart with non-epidemic season mean and sd
+USA_ewma_nep <- ewma(FluNet_USA$ALL_INF, lambda = 0.3, nsigmas = 3, center = USA_meancount_nep, std.dev = USA_sdcount_nep)
+summary(USA_ewma_nep)
+# gives more reasonable and accurate results, tuning of lambda required, but 0.3 seems to be good
