@@ -6,6 +6,10 @@ library(MASS)
 library(dplyr)
 library(msm)
 library(qcc)
+library(AnomalyDetection)
+library(bcp)
+library(R2WinBUGS)
+
 
 # load FluNet data
 setwd("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/FluNet")
@@ -31,6 +35,11 @@ FluNet_data$Country <- revalue(FluNet_data$Country, c("Iran (Islamic Republic of
                                                       "United States of America" = "United States", "Viet Nam" = "Vietnam"))
 country_list <- levels(FluNet_data$Country)
 
+years <- 2012:2020
+FluNet_data$season <- cut(FluNet_data$SDATE, 
+                          breaks=as.POSIXct(paste(years,"-07-01",sep="")),
+                          labels=paste(years[-length(years)],years[-length(years)]+1,sep="/"))
+
 
 
 ##### Periodic outbreak detection method #####
@@ -51,6 +60,7 @@ ggplot(data = FluNet_France, aes(x = SDATE, y = ALL_INF)) +
 
 ggplot(data = FluNet_France, aes(x = SDATE, y = ALL_INF)) + 
   geom_line() +
+  geom_point() + 
   scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
   labs(x = "", y = "influenza case counts", title = "WHO FluNet data for France (cut off so potential pruning limits can be shown)") + 
   geom_hline(yintercept = prune_France, col = "red", lty = "dashed") + 
@@ -58,6 +68,13 @@ ggplot(data = FluNet_France, aes(x = SDATE, y = ALL_INF)) +
   annotate("text", x = as.POSIXct("2013-01-01"), y = c(19.6, 27, 43.1, 77.6), 
            label = c("35th perc.", "40th perc.", "45th perc.", "50th perc."), col = "red", size = 3.4)
 # 35th percentile cutoff might work best for France data, but is probably too low for other countries
+
+ggplot(data = FluNet_France, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line() +
+  geom_point() + 
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "laboratory-confirmed influenza case counts", title = "WHO FluNet data for France (zoom)") + 
+  scale_y_continuous(limits = c(0, 100))
 
 for (i in seq_along(country_list)) { 
   prune <- quantile(subset(FluNet_data$ALL_INF, FluNet_data$Country == country_list[i]), probs = c(0.35, 0.4, 0.45, 0.5))
@@ -76,14 +93,21 @@ for (i in seq_along(country_list)) {
 # problem 2: Epidemic threshold (pruning percentile) is different for every country, more of an eyeballing process
 
 
-
-#### outbreak detection with surveillance pacakge #####
-# filter for US as illustrative example
-FluNet_USA <- filter(FluNet_data, Country == "United States") %>% select(c(SDATE, ALL_INF))
+# filter for US, Nigeria and Ecuador as illustrative examples
+FluNet_USA <- filter(FluNet_data, Country == "United States") %>% select(c(SDATE, ALL_INF, season))
 FluNet_USA_Counts <- FluNet_USA$ALL_INF
 FluNet_USA_Epoch <- as.Date(FluNet_USA$SDATE)
 
-# construct sts object
+FluNet_Nig <- filter(FluNet_data, Country == "Nigeria") %>% select(c(SDATE, ALL_INF, season))
+FluNet_Nig_Counts <- FluNet_Nig$ALL_INF
+FluNet_Nig_Epoch <- as.Date(FluNet_Nig$SDATE)
+
+FluNet_Ecu <- filter(FluNet_data, Country == "Ecuador") %>% select(c(SDATE, ALL_INF, season))
+FluNet_Ecu_Counts <- FluNet_Ecu$ALL_INF
+FluNet_Ecu_Epoch <- as.Date(FluNet_Ecu$SDATE)
+
+
+# construct sts objects
 USA_sts <- sts(observed = FluNet_USA_Counts, epoch = FluNet_USA_Epoch, epochAsDate = TRUE)
 plot(USA_sts)
 head(epoch(USA_sts))
@@ -91,36 +115,160 @@ head(observed(USA_sts))
 
 USA_disProg <- sts2disProg(USA_sts)
 
-# try Farrington algorithm
+
+Nig_sts <- sts(observed = FluNet_Nig_Counts, epoch = FluNet_Nig_Epoch, epochAsDate = TRUE)
+Nig_disProg <- sts2disProg(Nig_sts)
+plot(Nig_sts)
+
+Ecu_sts <- sts(observed = FluNet_Ecu_Counts, epoch = FluNet_Ecu_Epoch, epochAsDate = TRUE)
+Ecu_disProg <- sts2disProg(Ecu_sts)
+plot(Ecu_sts)
+
+##### Percentage methods #####
+### Neuzil method (weeks with > 1% of annual positive tests) and Izurieta method (weeks with > 5% of annual positive tests))
+
+# years <- 2012:2020
+# FluNet_USA$season <- cut(FluNet_USA$SDATE, 
+#                          breaks=as.POSIXct(paste(years,"-07-01",sep="")),
+#                          labels=paste(years[-length(years)],years[-length(years)]+1,sep="/"))
+FluNet_USA <- FluNet_USA %>%  group_by(season) %>% mutate(annual_flu_pos = sum(ALL_INF)) %>% ungroup()
+FluNet_USA <- FluNet_USA %>% mutate(perc_flu_pos = ALL_INF/annual_flu_pos, Neuzil = ifelse(perc_flu_pos > 0.01, TRUE, FALSE)) %>% 
+  mutate(Neuzil_case_limit = annual_flu_pos*0.01)
+
+ggplot(data = FluNet_USA, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line() +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for USA with seasonal Neuzil outbreak limit", 
+       caption = "Neuzil outbreak limit is weeks with > 1% of annual positive tests \n
+       Influenza season: July 1st - June 30th") +
+  geom_line(aes(x = SDATE, y = Neuzil_case_limit), col = "red", lty = 2, size = 1) 
+# alerts very late, problem with missing data in non-epidemic season and multi-country scale
+
+# Nigeria
+FluNet_Nig <- FluNet_Nig %>%  group_by(season) %>% mutate(annual_flu_pos = sum(ALL_INF)) %>% ungroup()
+FluNet_Nig <- FluNet_Nig %>% mutate(perc_flu_pos = ALL_INF/annual_flu_pos, Neuzil = ifelse(perc_flu_pos > 0.01, TRUE, FALSE)) %>% 
+  mutate(Neuzil_case_limit = annual_flu_pos*0.01)
+
+ggplot(data = FluNet_Nig, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line() +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Nigeria with seasonal Neuzil outbreak limit", 
+       caption = "Neuzil outbreak limit is weeks with > 1% of annual positive tests \n
+       Influenza season: July 1st - June 30th") +
+  geom_line(aes(x = SDATE, y = Neuzil_case_limit), col = "red", lty = 2, size = 1) 
+
+# Ecuador
+FluNet_Ecu <- FluNet_Ecu %>%  group_by(season) %>% mutate(annual_flu_pos = sum(ALL_INF)) %>% ungroup()
+FluNet_Ecu <- FluNet_Ecu %>% mutate(perc_flu_pos = ALL_INF/annual_flu_pos, Neuzil = ifelse(perc_flu_pos > 0.01, TRUE, FALSE)) %>% 
+  mutate(Neuzil_case_limit = annual_flu_pos*0.01)
+
+ggplot(data = FluNet_Ecu, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line() +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Ecuador with seasonal Neuzil outbreak limit", 
+       caption = "Neuzil outbreak limit is weeks with > 1% of annual positive tests \n
+       Influenza season: July 1st - June 30th") +
+  geom_line(aes(x = SDATE, y = Neuzil_case_limit), col = "red", lty = 2, size = 1) 
+
+
+### proportion of positive isolates (Cowling method)
+FluNet_USA <- filter(FluNet_data, Country == "United States") %>% mutate(Pos.Prop = ALL_INF/SPEC_PROCESSED_NB) %>%
+  select(c(SDATE, ALL_INF, Pos.Prop, season))
+FluNet_USA <- FluNet_USA %>% group_by(season) %>% mutate(max_Pos.Prop = max(Pos.Prop), threshold30 = 0.3*max_Pos.Prop, 
+                                                         threshold20 = 0.2*max_Pos.Prop, threshold10 = 0.1*max_Pos.Prop) %>% 
+  ungroup()
+
+ggplot(data = FluNet_USA, aes(x = SDATE)) +
+  geom_line(aes(y = Pos.Prop, col = "pos. sample prop")) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", 
+       title = "WHO FluNet data for USA with % threshold of maximum positive sample proportion") +
+  geom_line(aes(y = threshold30, col = "30% threshold"), lty = 2, size = 1) +
+  geom_line(aes(y = threshold20, col = "20% threshold"), lty = 2, size = 1) +
+  geom_line(aes(y = threshold10, col = "10% threshold"), lty = 2, size = 1) + 
+  scale_color_brewer(palette = "Set1")
+
+FluNet_Ecu <- filter(FluNet_data, Country == "Ecuador") %>% mutate(Pos.Prop = ALL_INF/SPEC_PROCESSED_NB) %>%
+  select(c(SDATE, ALL_INF, Pos.Prop, season))
+FluNet_Ecu <- FluNet_Ecu %>% group_by(season) %>% mutate(max_Pos.Prop = max(Pos.Prop), threshold30 = 0.3*max_Pos.Prop, 
+                                                         threshold20 = 0.2*max_Pos.Prop, threshold10 = 0.1*max_Pos.Prop) %>% 
+  ungroup()
+
+ggplot(data = FluNet_Ecu, aes(x = SDATE)) +
+  geom_line(aes(y = Pos.Prop, col = "pos. sample prop")) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", 
+       title = "WHO FluNet data for Ecuador with % threshold of maximum positive sample proportion") +
+  geom_line(aes(y = threshold30, col = "30% threshold"), lty = 2, size = 1) +
+  geom_line(aes(y = threshold20, col = "20% threshold"), lty = 2, size = 1) +
+  geom_line(aes(y = threshold10, col = "10% threshold"), lty = 2, size = 1) + 
+  scale_color_brewer(palette = "Set1")
+
+
+#### outbreak detection with surveillance pacakge #####
+### Farrington algorithm
 USA_outbreak_Farr <- farringtonFlexible(sts = USA_sts, control = list(
   b = 2, w = 3, weightsThreshold = 1, noPeriods = 1,
   pastWeeksNotIncluded = 26, pThresholdTrend = 0.05,
   thresholdMethod = "delta", trend = TRUE, thresholdMethod = "nbPlugin"
 ))
-
-plot(USA_outbreak_Farr)
+plot(USA_outbreak_Farr, main = "USA improved Farrington algorithm")
 # not useful because takes seasonality into account
 
+# Ecu_outbreak_Farr <- farringtonFlexible(sts = Ecu_sts, control = list(
+#   b = 2, w = 3, weightsThreshold = 1, noPeriods = 1,
+#   pastWeeksNotIncluded = 26, pThresholdTrend = 0.05,
+#   thresholdMethod = "delta", trend = TRUE, thresholdMethod = "nbPlugin"
+# ))
+# plot(Ecu_outbreak_Farr, main = "USA improved Farrington algorithm")
 
-# try EARS C1-3 algorithms
+## EARS C1-3 algorithms
+# USA
 USA_outbreak_C1 <- earsC(USA_sts, control = list(
   method = "C1", baseline = 7, minSigma = 1, alpha = 0.05
 ))
-plot(USA_outbreak_C1)
+plot(USA_outbreak_C1, main = "USA EARS C1")
 sum(alarms(USA_outbreak_C1))
 
-USA_outbreak_C2 <- earsC(USA_sts, control = list(
+
+USA_outbreak_C2_7 <- earsC(USA_sts, control = list(
   method = "C2", baseline = 7, minSigma = 1, alpha = 0.01
 ))
-plot(USA_outbreak_C2)
-sum(alarms(USA_outbreak_C2))
+plot(USA_outbreak_C2_7, main = "USA EARS C2, 7 weeks baseline")
+
+USA_outbreak_C2_14 <- earsC(USA_sts, control = list(
+  method = "C2", baseline = 14, minSigma = 1, alpha = 0.01
+))
+plot(USA_outbreak_C2_14, main = "USA EARS C2, 14 weeks baseline")
+
+USA_outbreak_C2_28 <- earsC(USA_sts, control = list(
+  method = "C2", baseline = 28, minSigma = 1, alpha = 0.01
+))
+plot(USA_outbreak_C2_28, main = "USA EARS C2, 28 weeks baseline")
 
 USA_outbreak_C3 <- earsC(USA_sts, control = list(
   method = "C3", baseline = 7, minSigma = 1, alpha = 0.01
 ))
-plot(USA_outbreak_C3)
+plot(USA_outbreak_C3, main = "USA EARS 3")
 sum(alarms(USA_outbreak_C3))
-# works fine, tuning of parameters required, raises alarm very early in season
+# tuning of parameters required, raises alarm very early in season, many false positives
+
+# Ecuador
+Ecu_outbreak_C2_7 <- earsC(Ecu_sts, control = list(
+  method = "C2", baseline = 7, minSigma = 1, alpha = 0.01
+))
+plot(Ecu_outbreak_C2_7, main = "Ecuador EARS C2, 7 weeks baseline")
+
+Ecu_outbreak_C2_14 <- earsC(Ecu_sts, control = list(
+  method = "C2", baseline = 14, minSigma = 1, alpha = 0.01
+))
+plot(Ecu_outbreak_C2_14, main = "Ecuador EARS C2, 14 weeks baseline")
+
+Ecu_outbreak_C2_28 <- earsC(Ecu_sts, control = list(
+  method = "C2", baseline = 28, minSigma = 1, alpha = 0.01
+))
+plot(Ecu_outbreak_C2_28, main = "Ecuador EARS C2, 28 weeks baseline")
+
 
 
 # cusum method
@@ -128,6 +276,12 @@ USA_outbreak_cusum <- cusum(USA_sts, control = list(
   range = 1:length(observed(USA_sts)), k = 1.04, h = 2.26, trans = "standard", m = NULL
 ))
 plot(USA_outbreak_cusum)
+
+# CUSUM again
+kh <- find.kh(ARLa = 500, ARLr = 7)
+USA_2013_cusum <- surveillance::cusum(USA_2013_sts, control= list(
+  range = 5:length(observed(USA_2013_sts)), k = kh$k, h= kh$h, trans = "rossi"))
+plot(USA_2013_cusum)
 # I don't really understand what's going on here, which parameters to tune and why the thresholds look like this
 
 
@@ -138,7 +292,7 @@ summary(USA_qp)
 # Overdispersion parameter is estimated as alpha = 8254.8, which is huge! mean is 7.95
 
 USA_outbreak_glrnb <- glrnb(USA_sts, control = list(
-  range = 1:length(observed(USA_sts)), c.ARL = 5, mu0 = NULL, alpha = 8254.8, Mtilde=1, M=-1, change="intercept", 
+  range = 30:length(observed(USA_sts)), c.ARL = 5, mu0 = NULL, alpha = FALSE, Mtilde=1, M=-1, change="intercept", 
   dir = "inc", theta=NULL, ret="value"
 )) 
 plot(USA_outbreak_glrnb)
@@ -187,27 +341,7 @@ plot(USA_2013_outbreakP)
 
 
 
-# Neuzil method (weeks with > 1% of annual positive tests) and Izurieta method (weeks with > 5% of annual positive tests))
-years <- 2012:2020
-FluNet_USA$season <- cut(FluNet_USA$SDATE, 
-                         breaks=as.POSIXct(paste(years,"-07-01",sep="")),
-                         labels=paste(years[-length(years)],years[-length(years)]+1,sep="/"))
-FluNet_USA <- FluNet_USA %>%  group_by(season) %>% mutate(annual_flu_pos = sum(ALL_INF)) %>% ungroup()
-FluNet_USA <- FluNet_USA %>% mutate(perc_flu_pos = ALL_INF/annual_flu_pos, Neuzil = ifelse(perc_flu_pos > 0.01, TRUE, FALSE), 
-                                    Izurieta = ifelse(perc_flu_pos > 0.05, TRUE, FALSE)) 
-FluNet_USA <- FluNet_USA %>% mutate(Neuzil_case_limit = annual_flu_pos*0.01, Izurieta_case_limit = annual_flu_pos * 0.05)
 
-ggplot(data = FluNet_USA, aes(x = SDATE, y = ALL_INF)) + 
-  geom_line() +
-  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
-  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for USA with Neuzil outbreak limit", 
-       caption = "Neuzil outbreak limit is weeks with > 1% of annual positive tests") +
-  geom_line(aes(x = SDATE, y = Neuzil_case_limit), col = "red", lty = 2) 
-
-FluNet_data$season <- cut(FluNet_data$SDATE, 
-                          breaks=as.POSIXct(paste(years,"-07-01",sep="")),
-                          labels=paste(years[-length(years)],years[-length(years)]+1,sep="/"))
-# alerts very late, problem with missing data in non-epidemic season and multi-country scale
 
 
 # EWMA chart
@@ -225,3 +359,68 @@ USA_sdcount_nep <- sd(FluNet_USA_nep$ALL_INF)
 USA_ewma_nep <- ewma(FluNet_USA$ALL_INF, lambda = 0.3, nsigmas = 3, center = USA_meancount_nep, std.dev = USA_sdcount_nep)
 summary(USA_ewma_nep)
 # gives more reasonable and accurate results, tuning of lambda required, but 0.3 seems to be good
+
+
+# AnomalyDetection library
+# prepare the data
+FluNet_USA_vec <- FluNet_USA$ALL_INF
+
+anomalies = AnomalyDetectionVec(FluNet_USA_vec, max_anoms = 0.1, direction = "pos", alpha = 0.05, plot = TRUE, 
+                               period = 52, longterm_period = NULL)
+anomalies$plot
+# this does not work at all
+
+# try anomaly detection with only one season worth of data
+FluNet_USA_2013 <- filter(FluNet_USA, SDATE > "2013-04-01" & SDATE < "2014-01-01") %>% select(c(SDATE, ALL_INF))
+anomalies_2013 = AnomalyDetectionTs(FluNet_USA_2013, max_anoms = 0.1, direction = "pos", alpha = 0.05, plot = TRUE,
+                                    longterm = FALSE)
+anomalies_2013$plot
+# nope! FluNet data are not suited for this algorithm, might be worth a try with HM and EIOS data
+
+
+
+
+# Bayesian change point analysis
+USA_bcp <- bcp(FluNet_USA$ALL_INF, burnin = 100, mcmc = 5000)
+plot(USA_bcp)
+
+USA_bcp_2013 <- bcp(FluNet_USA_2013$ALL_INF, burnin = 100, mcmc = 5000)
+plot(USA_bcp_2013)
+
+
+FluNet_USA <- FluNet_USA %>% mutate(bcp.postprob = USA_bcp$posterior.prob)
+
+first_cp <- FluNet_USA %>% group_by(season) %>% mutate(changepoint = ifelse(bcp.postprob > 0.5, SDATE, NA)) %>% 
+  filter(!is.na(changepoint)) %>% filter(SDATE == min(SDATE)) %>% ungroup() %>% select(SDATE, changepoint)
+
+FluNet_USA_cp <- left_join(FluNet_USA, first_cp, by = "SDATE")
+
+# Ctrl-Shift-C for commenting whole sections of code!
+# for(i in levels(FluNet_USA2$season)){
+#   for(j in 1:length(FluNet_USA2$season[FluNet_USA2$season == i])){
+#     index = j
+#     print(index)
+#     if(FluNet_USA2$bcp.postprob[j] >= 0.5){
+#       FluNet_USA2$changepoint[j] <- as.POSIXct(FluNet_USA2$SDATE[j])
+#     #   break
+#     # } else {
+#     #   FluNet_USA2$changepoint[j] <- 1
+#     }
+#   }
+# }
+# 
+# first_cp <- c(2, 48, 98, 160, 206, 257, 310, 359)
+# FluNet_USA$changepoint <- NA
+# FluNet_USA$changepoint[first_cp] <- FluNet_USA$SDATE[first_cp]
+
+
+ggplot(data = FluNet_USA_cp, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line(aes(col = bcp.postprob), size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for USA with posterior probability of change point",
+       caption = "Dashed vertical lines mark first change point per influenza season (July 1st - June 30th)") + 
+  geom_vline(xintercept = na.omit(FluNet_USA_cp$changepoint), lty = 2, col = "red")
+
+
+
+
