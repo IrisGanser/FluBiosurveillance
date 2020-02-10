@@ -271,18 +271,37 @@ plot(Ecu_outbreak_C2_28, main = "Ecuador EARS C2, 28 weeks baseline")
 
 
 
-# cusum method
-USA_outbreak_cusum <- cusum(USA_sts, control = list(
-  range = 1:length(observed(USA_sts)), k = 1.04, h = 2.26, trans = "standard", m = NULL
-))
-plot(USA_outbreak_cusum)
-
-# CUSUM again
+## CUSUM method
 kh <- find.kh(ARLa = 500, ARLr = 7)
+
+#USA
+USA_outbreak_cusum <- surveillance::cusum(USA_sts, control = list(
+  range = 1:length(observed(USA_sts)), k = kh$k, h= kh$h, trans = "rossi", m = NULL
+))
+plot(USA_outbreak_cusum, main = "USA CUSUM with Rossi method")
+
+# for one season only
+FluNet_USA_2013 <- filter(FluNet_USA, SDATE > "2013-04-01" & SDATE < "2014-01-01") 
+USA_2013_sts <- sts(observed = FluNet_USA_2013$ALL_INF, epochAsDate = FALSE, start = c(2013, 4), frequency = 52)
+
 USA_2013_cusum <- surveillance::cusum(USA_2013_sts, control= list(
   range = 5:length(observed(USA_2013_sts)), k = kh$k, h= kh$h, trans = "rossi"))
-plot(USA_2013_cusum)
-# I don't really understand what's going on here, which parameters to tune and why the thresholds look like this
+plot(USA_2013_cusum, main = "USA CUSUM with Rossi method")
+
+#Ecuador
+Ecu_outbreak_cusum <- surveillance::cusum(Ecu_sts, control = list(
+  range = 1:length(observed(Ecu_sts)), k = kh$k, h= kh$h, trans = "rossi", m = NULL
+))
+plot(Ecu_outbreak_cusum, main = "Ecuador CUSUM with Rossi method")
+
+# for one season only
+FluNet_Ecu_2013 <- filter(FluNet_Ecu, SDATE > "2013-04-01" & SDATE < "2014-01-01") 
+Ecu_2013_sts <- sts(observed = FluNet_Ecu_2013$ALL_INF, epochAsDate = FALSE, start = c(2013, 4), frequency = 52)
+
+Ecu_2013_cusum <- surveillance::cusum(Ecu_2013_sts, control= list(
+  range = 1:length(observed(Ecu_2013_sts)), k = kh$k, h= kh$h, trans = "rossi"))
+plot(Ecu_2013_cusum, main = "Ecuador CUSUM with Rossi method")
+
 
 
 # glrnb method
@@ -296,6 +315,12 @@ USA_outbreak_glrnb <- glrnb(USA_sts, control = list(
   dir = "inc", theta=NULL, ret="value"
 )) 
 plot(USA_outbreak_glrnb)
+
+USA_2013_glrnb <- glrnb(USA_2013_sts, control = list(
+  range = 10:length(observed(USA_2013_sts)), c.ARL = 5, mu0 = NULL, alpha = FALSE, Mtilde=1, M=-1, change="intercept", 
+  dir = "inc", theta=NULL, ret="value"
+)) 
+plot(USA_2013_glrnb)
 # don't understand what's going on here, but it does not look very useful. 
 
 # Hidden Markov model with the surveillance package
@@ -323,29 +348,36 @@ plot(USA_outbreak_rki1)
 
 
 # boda algorithm 
-
-control_boda <- list(range = 1:length(observed(USA_sts)), X = NULL, season = FALSE, prior = "iid", alpha = 0.05, samplingMethod = "marginals")
+# control_boda <- list(range = 1:length(observed(USA_sts)), X = NULL, season = FALSE, prior = "iid", alpha = 0.05, samplingMethod = "marginals")
 # USA_outbreak_boda <- boda(USA_sts, control = control_boda)
-plot(USA_outbreak_boda)
-#took forever to calculate although the number of generated samples was very low
+# plot(USA_outbreak_boda)
+# took forever to calculate although the number of generated samples was very low
 
 
-#outbreakP algorithm (apparently especially suited for influenza outbreak detection)
-FluNet_USA_2013 <- filter(FluNet_USA, SDATE > "2013-04-01" & SDATE < "2014-01-01") %>% select(c(SDATE, ALL_INF))
-USA_2013_sts <- sts(observed = FluNet_USA_2013$ALL_INF, epochAsDate = FALSE, start = c(2013, 4), frequency = 52)
+
+## outbreakP algorithm (apparently especially suited for influenza outbreak detection)
+# USA
+USA_outbreakP <- outbreakP(USA_sts, control = list(
+  range = 1:length(observed(USA_sts)), k = 100, ret = "cases"
+))
+plot(USA_outbreakP)
 
 USA_2013_outbreakP <- outbreakP(USA_2013_sts, control = list(
   range = 1:length(observed(USA_2013_sts)), k = 100, ret = "cases"
 ))
-plot(USA_2013_outbreakP)
+plot(USA_2013_outbreakP, main = "USA OutbreakP")
+
+# Ecuador
+Ecu_2013_outbreakP <- outbreakP(Ecu_2013_sts, control = list(
+  range = 1:length(observed(Ecu_2013_sts)), k = 100, ret = "cases"
+))
+plot(Ecu_2013_outbreakP, main = "Ecuador OutbreakP")
 
 
 
-
-
-
-# EWMA chart
-USA_ewma <- ewma(FluNet_USA$ALL_INF, lambda = 0.3, nsigmas = 3)
+## EWMA chart
+USA_ewma <- ewma(FluNet_USA$ALL_INF, lambda = 0.3, nsigmas = 3,
+                 title = "USA EWMA")
 summary(USA_ewma)
 # threshold for outbreak detection is way too high. 
 # Somehow, the threshold must be brought down! Take only non-epidemic period for baseline calculation?
@@ -356,12 +388,22 @@ USA_meancount_nep <- mean(FluNet_USA_nep$ALL_INF)
 USA_sdcount_nep <- sd(FluNet_USA_nep$ALL_INF)
 
 # new EWMA chart with non-epidemic season mean and sd
-USA_ewma_nep <- ewma(FluNet_USA$ALL_INF, lambda = 0.3, nsigmas = 3, center = USA_meancount_nep, std.dev = USA_sdcount_nep)
+USA_ewma_nep <- ewma(FluNet_USA$ALL_INF, lambda = 0.3, nsigmas = 3, center = USA_meancount_nep, std.dev = USA_sdcount_nep, 
+                     title = "USA EWMA with baseline mean and SD")
 summary(USA_ewma_nep)
 # gives more reasonable and accurate results, tuning of lambda required, but 0.3 seems to be good
 
+# Ecuador
+Ecu_ewma <- ewma(FluNet_Ecu$ALL_INF, lambda = 0.3, nsigmas = 3,
+                 title = "Ecuador EWMA")
+summary(Ecu_ewma)
 
-# AnomalyDetection library
+
+
+
+
+
+## AnomalyDetection library
 # prepare the data
 FluNet_USA_vec <- FluNet_USA$ALL_INF
 
@@ -370,7 +412,7 @@ anomalies = AnomalyDetectionVec(FluNet_USA_vec, max_anoms = 0.1, direction = "po
 anomalies$plot
 # this does not work at all
 
-# try anomaly detection with only one season worth of data
+# try anomaly detection with only one season of data
 FluNet_USA_2013 <- filter(FluNet_USA, SDATE > "2013-04-01" & SDATE < "2014-01-01") %>% select(c(SDATE, ALL_INF))
 anomalies_2013 = AnomalyDetectionTs(FluNet_USA_2013, max_anoms = 0.1, direction = "pos", alpha = 0.05, plot = TRUE,
                                     longterm = FALSE)
@@ -380,7 +422,7 @@ anomalies_2013$plot
 
 
 
-# Bayesian change point analysis
+## Bayesian change point analysis
 USA_bcp <- bcp(FluNet_USA$ALL_INF, burnin = 100, mcmc = 5000)
 plot(USA_bcp)
 
@@ -422,5 +464,37 @@ ggplot(data = FluNet_USA_cp, aes(x = SDATE, y = ALL_INF)) +
   geom_vline(xintercept = na.omit(FluNet_USA_cp$changepoint), lty = 2, col = "red")
 
 
+FluNet_USA_allcp <- FluNet_USA %>% mutate(changepoint = ifelse(bcp.postprob > 0.5, SDATE, NA))
+ggplot(data = FluNet_USA_allcp, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line(aes(col = bcp.postprob), size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for USA with posterior probability of change point",
+       caption = "Dashed vertical lines mark all change points") + 
+  geom_vline(xintercept = na.omit(FluNet_USA_allcp$changepoint), lty = 2, col = "red")
 
+
+#Ecuador
+Ecu_bcp <- bcp(FluNet_Ecu$ALL_INF, burnin = 100, mcmc = 5000)
+plot(Ecu_bcp)
+
+FluNet_Ecu <- FluNet_Ecu %>% mutate(bcp.postprob = Ecu_bcp$posterior.prob)
+
+first_cp_Ecu <- FluNet_Ecu %>% group_by(season) %>% mutate(changepoint = ifelse(bcp.postprob > 0.5, SDATE, NA)) %>% 
+  filter(!is.na(changepoint)) %>% filter(SDATE == min(SDATE)) %>% ungroup() %>% select(SDATE, changepoint)
+
+FluNet_Ecu_cp <- left_join(FluNet_Ecu, first_cp_Ecu, by = "SDATE")
+ggplot(data = FluNet_Ecu_cp, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line(aes(col = bcp.postprob), size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Ecuador with posterior probability of change point",
+       caption = "Dashed vertical lines mark first change point per influenza season (July 1st - June 30th)") + 
+  geom_vline(xintercept = na.omit(FluNet_Ecu_cp$changepoint), lty = 2, col = "red")
+
+FluNet_Ecu_allcp <- FluNet_Ecu %>% mutate(changepoint = ifelse(bcp.postprob > 0.5, SDATE, NA))
+ggplot(data = FluNet_Ecu_allcp, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line(aes(col = bcp.postprob), size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Ecuador with posterior probability of change point",
+       caption = "Dashed vertical lines mark all change points") + 
+  geom_vline(xintercept = na.omit(FluNet_Ecu_allcp$changepoint), lty = 2, col = "red")
 
