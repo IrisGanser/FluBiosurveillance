@@ -498,3 +498,35 @@ ggplot(data = FluNet_Ecu_allcp, aes(x = SDATE, y = ALL_INF)) +
        caption = "Dashed vertical lines mark all change points") + 
   geom_vline(xintercept = na.omit(FluNet_Ecu_allcp$changepoint), lty = 2, col = "red")
 
+
+##### apply bcp to all countries #####
+country_list <- levels(FluNet_data$Country)
+country_code <- c("Arg", "Aus", "Bra", "Bul", "Chn", "Cri", "Ecu", "Egy", "Fra", "Gbr", "Ger", "Grc",
+                  "Ind", "Irn", "Mex", "Nig", "Rus", "Sau", "Swe", "Tha", "Ury", "Usa", "Vnm", "Zaf")
+
+
+
+for (i in seq_along(country_list)) { 
+  FluNet_temp <- filter(FluNet_data, FluNet_data$Country==country_list[i])
+  
+  bcp_temp <- bcp(FluNet_temp$ALL_INF, burnin = 100, mcmc = 5000)
+  plot(bcp_temp)
+  
+  FluNet_data$bcp.postprob[FluNet_data$Country==country_list[i]] <- bcp_temp$posterior.prob
+}
+FluNet_data <- FluNet_data %>% mutate(changepoint = ifelse(bcp.postprob > 0.5, SDATE, NA))
+
+for (i in seq_along(country_list)) {
+  FluNet_temp <- filter(FluNet_data, FluNet_data$Country==country_list[i])
+  
+  plot <- ggplot(FluNet_temp, aes(x = SDATE, y = ALL_INF)) + 
+    geom_line(aes(col = bcp.postprob), size = 0.75) +
+    scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+    labs(x = "", y = "influenza case counts", 
+         title = paste("WHO FluNet data for", country_list[i], "with posterior probability of change point", sep = " "),
+         caption = "Dashed vertical lines mark all change points") + 
+    geom_vline(xintercept = na.omit(FluNet_temp$changepoint), lty = 2, col = "red")
+  
+  print(plot)
+  #ggsave(plot = plot, file = paste("FluNet bcp", country_list[i], ".jpeg", sep=' '))
+}
