@@ -7,6 +7,7 @@ library(readxl)
 library(qcc)
 library(surveillance)
 library(AnomalyDetection)
+library(BreakoutDetection)
 
 
 # load HealthMap data
@@ -46,6 +47,12 @@ dataHM$country <- factor(dataHM$country)
 
 HM_byweek <- dataHM %>% group_by(date = floor_date(load_date, "week"), country = country, .drop = FALSE) %>%
   summarize(counts=n()) %>% as.data.frame()
+
+years <- 2012:2020
+HM_byweek$season <- cut(HM_byweek$date, 
+                          breaks=as.POSIXct(paste(years,"-07-01",sep="")),
+                          labels=paste(years[-length(years)],years[-length(years)]+1,sep="/"))
+
 
 
 # filter for USA and Ecuador
@@ -164,6 +171,7 @@ summary(USA_ewma)
 # threshold for outbreak detection is too high even with HM data
 
 # calculate mean and standard deviation during non-epidemic period (May-October for temperate regions in Northern hemisphere)
+# baseline could also be all observations below the 30th percentile (or other value)
 HM_USA_nep <- filter(HM_USA, month(HM_USA$date) %in% 5:10)
 USA_meancount_nep <- mean(HM_USA_nep$counts)
 USA_sdcount_nep <- sd(HM_USA_nep$counts)
@@ -196,3 +204,64 @@ anomalies_Ecu = AnomalyDetectionVec(HM_Ecu_vec, max_anoms = 0.1, direction = "po
                                     period = 52, longterm_period = NULL)
 anomalies_Ecu$plot
 # does not work at all, since every count is an anomaly now
+
+
+## bcp
+USA_bcp <- bcp(HM_USA$counts, burnin = 100, mcmc = 5000)
+plot(USA_bcp)
+
+HM_USA <- HM_USA %>% mutate(bcp.postprob = USA_bcp$posterior.prob)
+
+first_cp <- HM_USA %>% group_by(season) %>% mutate(changepoint = ifelse(bcp.postprob > 0.5, date, NA)) %>% 
+  filter(!is.na(changepoint)) %>% filter(date == min(date)) %>% ungroup() %>% select(date, changepoint)
+HM_USA_cp <- left_join(HM_USA, first_cp, by = "date")
+
+ggplot(data = HM_USA_cp, aes(x = date, y = counts)) + 
+  geom_line(aes(col = bcp.postprob), size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "HealthMap data for USA with posterior probability of change point",
+       caption = "Dashed vertical lines mark first change point per influenza season (July 1st - June 30th)") + 
+  geom_vline(xintercept = na.omit(HM_USA_cp$changepoint), lty = 2, col = "red")
+
+
+HM_USA_allcp <- HM_USA %>% mutate(changepoint = ifelse(bcp.postprob > 0.5, date, NA))
+ggplot(data = HM_USA_allcp, aes(x = date, y = counts)) + 
+  geom_line(aes(col = bcp.postprob), size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "HealthMap data for USA with posterior probability of change point",
+       caption = "Dashed vertical lines mark all change points") + 
+  geom_vline(xintercept = na.omit(HM_USA_allcp$changepoint), lty = 2, col = "red")
+
+# Ecuador
+Ecu_bcp <- bcp(HM_Ecu$counts, burnin = 100, mcmc = 5000)
+plot(Ecu_bcp)
+
+HM_Ecu <- HM_Ecu %>% mutate(bcp.postprob = Ecu_bcp$posterior.prob)
+
+first_cp_Ecu <- HM_Ecu %>% group_by(season) %>% mutate(changepoint = ifelse(bcp.postprob > 0.5, date, NA)) %>% 
+  filter(!is.na(changepoint)) %>% filter(date == min(date)) %>% ungroup() %>% select(date, changepoint)
+
+HM_Ecu_cp <- left_join(HM_Ecu, first_cp_Ecu, by = "date")
+ggplot(data = HM_Ecu_cp, aes(x = date, y = counts)) + 
+  geom_line(aes(col = bcp.postprob), size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "HealthMap data for Ecuador with posterior probability of change point",
+       caption = "Dashed vertical lines mark first change point per influenza season (July 1st - June 30th)") + 
+  geom_vline(xintercept = na.omit(HM_Ecu_cp$changepoint), lty = 2, col = "red")
+
+HM_Ecu_allcp <- HM_Ecu %>% mutate(changepoint = ifelse(bcp.postprob > 0.5, date, NA))
+ggplot(data = HM_Ecu_allcp, aes(x = date, y = counts)) + 
+  geom_line(aes(col = bcp.postprob), size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "HealthMap data for Ecuador with posterior probability of change point",
+       caption = "Dashed vertical lines mark all change points") + 
+  geom_vline(xintercept = na.omit(HM_Ecu_allcp$changepoint), lty = 2, col = "red")
+
+
+##### Twitter BreakoutDetection#####
+breakout_data_USA <- select(HM_USA, c(counts, date)) %>% rename(count = counts, timestamp = date)
+breakout_USA <- breakout(breakout_data_USA, min.size = 5, method = "multi", plot = TRUE, beta = 0.001)
+breakout_USA$plot
+# does not work at all
+
+
