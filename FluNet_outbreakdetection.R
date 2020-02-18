@@ -97,15 +97,15 @@ for (i in seq_along(country_list)) {
 
 
 # filter for US, Nigeria and Ecuador as illustrative examples
-FluNet_USA <- filter(FluNet_data, Country == "United States") %>% select(c(SDATE, ALL_INF, season))
+FluNet_USA <- filter(FluNet_data, Country == "United States") %>% dplyr::select(c(SDATE, ALL_INF, season))
 FluNet_USA_Counts <- FluNet_USA$ALL_INF
 FluNet_USA_Epoch <- as.Date(FluNet_USA$SDATE)
 
-FluNet_Nig <- filter(FluNet_data, Country == "Nigeria") %>% select(c(SDATE, ALL_INF, season))
+FluNet_Nig <- filter(FluNet_data, Country == "Nigeria") %>% dplyr::select(c(SDATE, ALL_INF, season))
 FluNet_Nig_Counts <- FluNet_Nig$ALL_INF
 FluNet_Nig_Epoch <- as.Date(FluNet_Nig$SDATE)
 
-FluNet_Ecu <- filter(FluNet_data, Country == "Ecuador") %>% select(c(SDATE, ALL_INF, season))
+FluNet_Ecu <- filter(FluNet_data, Country == "Ecuador") %>% dplyr::select(c(SDATE, ALL_INF, season))
 FluNet_Ecu_Counts <- FluNet_Ecu$ALL_INF
 FluNet_Ecu_Epoch <- as.Date(FluNet_Ecu$SDATE)
 
@@ -436,7 +436,7 @@ plot(USA_bcp_2013)
 FluNet_USA <- FluNet_USA %>% mutate(bcp.postprob = USA_bcp$posterior.prob)
 
 first_cp <- FluNet_USA %>% group_by(season) %>% mutate(changepoint = ifelse(bcp.postprob > 0.5, SDATE, NA)) %>% 
-  filter(!is.na(changepoint)) %>% filter(SDATE == min(SDATE)) %>% ungroup() %>% select(SDATE, changepoint)
+  filter(!is.na(changepoint)) %>% filter(SDATE == min(SDATE)) %>% ungroup() %>% dplyr::select(SDATE, changepoint)
 
 FluNet_USA_cp <- left_join(FluNet_USA, first_cp, by = "SDATE")
 
@@ -471,29 +471,28 @@ FluNet_USA_allcp <- FluNet_USA %>% mutate(changepoint = ifelse(bcp.postprob > 0.
 ggplot(data = FluNet_USA_allcp, aes(x = SDATE, y = ALL_INF)) + 
   geom_line(aes(col = bcp.postprob), size = 0.75) +
   scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
-  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for USA with posterior probability of change point",
-       caption = "Dashed vertical lines mark all change points") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for USA with posterior probability of change point") + 
   geom_vline(xintercept = na.omit(FluNet_USA_allcp$changepoint), lty = 2, col = "red")
 
 
 # cp determined by special criteria
 
-FluNet_USA$cp_criteria <- NA
+FluNet_USA$bcp_criteria <- NA
 
-for(i in 2:nrow(FluNet_USA)){
-  if(FluNet_USA$bcp.postprob[i] >= 0.5 & FluNet_USA$bcp.postprob[i-1] < 0.5 & FluNet_USA$ALL_INF[i] > FluNet_USA$ALL_INF [i-1]){
-    FluNet_USA$cp_criteria[i] <- FluNet_USA$SDATE[i]
+for(i in 10:nrow(FluNet_USA)){
+  if(FluNet_USA$bcp.postprob[i] >= 0.5 & FluNet_USA$bcp.postprob[(i-1)] < 0.5 & # transition from non-epidemic to epidemic
+     mean(FluNet_USA$ALL_INF[(i-5):(i+5)]) > mean(FluNet_USA$ALL_INF [(i-6):(i+4)]) & # running mean to ensure that curve is rising
+     sum(!is.na(FluNet_USA$bcp_criteria[(i-10):(i-1)])) == 0){ # No outbreak flagged during the previous 5 weeks
+    FluNet_USA$bcp_criteria[i] <- FluNet_USA$SDATE[i]
   } else {
-    FluNet_USA$cp_criteria[i] <- NA
+    FluNet_USA$bcp_criteria[i] <- NA
   }
 }
 ggplot(data = FluNet_USA, aes(x = SDATE, y = ALL_INF)) + 
   geom_line(aes(col = bcp.postprob), size = 0.75) +
   scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
-  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for USA with posterior probability of change point",
-       caption = "Dashed vertical lines mark all change points identified with criteria: \n
-       Only CPs in increasing curves, only CPs where probability rises above 0.5 for the first time") + 
-  geom_vline(xintercept = na.omit(FluNet_USA$cp_criteria), lty = 2, col = "red")
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for USA with posterior probability of change point") + 
+  geom_vline(xintercept = na.omit(FluNet_USA$bcp_criteria), lty = 2, col = "red")
 
 #Ecuador
 Ecu_bcp <- bcp(FluNet_Ecu$ALL_INF, burnin = 100, mcmc = 5000)
@@ -521,22 +520,22 @@ ggplot(data = FluNet_Ecu_allcp, aes(x = SDATE, y = ALL_INF)) +
   geom_vline(xintercept = na.omit(FluNet_Ecu_allcp$changepoint), lty = 2, col = "red")
 
 
-FluNet_Ecu$cp_criteria <- NA
+FluNet_Ecu$bcp_criteria <- NA
 
-for(i in 2:nrow(FluNet_Ecu)){
-  if(FluNet_Ecu$bcp.postprob[i] >= 0.5 & FluNet_Ecu$bcp.postprob[i-1] < 0.5 & FluNet_Ecu$ALL_INF[i] > FluNet_Ecu$ALL_INF[i-1]){
-    FluNet_Ecu$cp_criteria[i] <- FluNet_Ecu$SDATE[i]
+for(i in 10:nrow(FluNet_Ecu)){
+  if(FluNet_Ecu$bcp.postprob[i] >= 0.5 & FluNet_Ecu$bcp.postprob[i-1] < 0.5 & 
+     mean(FluNet_Ecu$ALL_INF[(i-5):(i+5)]) > mean(FluNet_Ecu$ALL_INF [(i-6):(i+4)]) & 
+     sum(!is.na(FluNet_Ecu$bcp_criteria[(i-10):(i-1)])) == 0){
+    FluNet_Ecu$bcp_criteria[i] <- FluNet_Ecu$SDATE[i]
   } else {
-    FluNet_Ecu$cp_criteria[i] <- NA
+    FluNet_Ecu$bcp_criteria[i] <- NA
   }
 }
 ggplot(data = FluNet_Ecu, aes(x = SDATE, y = ALL_INF)) + 
   geom_line(aes(col = bcp.postprob), size = 0.75) +
   scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
-  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Ecuador with posterior probability of change point",
-       caption = "Dashed vertical lines mark all change points identified with criteria: \n
-       Only CPs in increasing curves, only CPs where probability rises above 0.5 for the first time") + 
-  geom_vline(xintercept = na.omit(FluNet_Ecu$cp_criteria), lty = 2, col = "red")
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Ecuador with posterior probability of change point") + 
+  geom_vline(xintercept = na.omit(FluNet_Ecu$bcp_criteria), lty = 2, col = "red")
 
 
 
@@ -591,8 +590,10 @@ ggplot(data = FluNet_USA, aes(x = SDATE, y = ALL_INF)) +
 
 # with criteria
 FluNet_USA$ecp_criteria <- NA
-for(i in 2:nrow(FluNet_USA)){
-  if(is.na(FluNet_USA$ecp[i]) == FALSE & FluNet_USA$ALL_INF[i] > FluNet_USA$ALL_INF [i-1]){
+for(i in 10:nrow(FluNet_USA)){
+  if(is.na(FluNet_USA$ecp[i]) == FALSE & 
+     mean(FluNet_USA$ALL_INF[(i-5):(i+5)]) > mean(FluNet_USA$ALL_INF [(i-6):(i+4)]) &
+     sum(!is.na(FluNet_USA$ecp_criteria[(i-10):(i-1)])) == 0){
     FluNet_USA$ecp_criteria[i] <- FluNet_USA$SDATE[i]
   } else {
     FluNet_USA$ecp_criteria[i] <- NA
@@ -601,10 +602,9 @@ for(i in 2:nrow(FluNet_USA)){
 ggplot(data = FluNet_USA, aes(x = SDATE, y = ALL_INF)) + 
   geom_line(size = 0.75) +
   scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
-  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for USA with change points") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for USA with change points, ecp package") + 
   geom_vline(xintercept = na.omit(FluNet_USA$ecp_criteria), lty = 2, col = "red")
-
-
+# ecp alerts very late
 
 # Ecuador
 
@@ -619,9 +619,25 @@ FluNet_Ecu$ecp[cp_Ecu] <- FluNet_Ecu$SDATE[cp_Ecu]
 ggplot(data = FluNet_Ecu, aes(x = SDATE, y = ALL_INF)) + 
   geom_line(size = 0.75) +
   scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
-  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Ecuador with change points") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Ecuador with change points, ecp package") + 
   geom_vline(xintercept = na.omit(FluNet_Ecu$ecp), lty = 2, col = "red")
 
+# with criteria
+FluNet_Ecu$ecp_criteria <- NA
+for(i in 10:nrow(FluNet_Ecu)){
+  if(is.na(FluNet_Ecu$ecp[i]) == FALSE & 
+     mean(FluNet_Ecu$ALL_INF[(i-5):(i+5)]) > mean(FluNet_Ecu$ALL_INF [(i-6):(i+4)]) &
+     sum(!is.na(FluNet_Ecu$ecp_criteria[(i-10):(i-1)])) == 0){
+    FluNet_Ecu$ecp_criteria[i] <- FluNet_Ecu$SDATE[i]
+  } else {
+    FluNet_Ecu$ecp_criteria[i] <- NA
+  }
+}
+ggplot(data = FluNet_Ecu, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line(size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Ecuador with change points, ecp package") + 
+  geom_vline(xintercept = na.omit(FluNet_Ecu$ecp_criteria), lty = 2, col = "red")
 
 
 ## cpm package
@@ -633,13 +649,14 @@ FluNet_USA$cpm[cpm_USA$changePoints] <- FluNet_USA$SDATE[cpm_USA$changePoints]
 ggplot(data = FluNet_USA, aes(x = SDATE, y = ALL_INF)) + 
   geom_line(size = 0.75) +
   scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
-  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for USA with change points, cpm package") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for USA with change points, cpm package, 'Exponential' algorithm") + 
   geom_vline(xintercept = na.omit(FluNet_USA$cpm), lty = 2, col = "red")
 
 FluNet_USA$cpm_criteria <- NA
-for(i in 4:nrow(FluNet_USA)){
-  # use running mean of +/- three observations to ensure that we are in the inreasing part of the curve
-  if(is.na(FluNet_USA$cpm[i]) == FALSE & mean(FluNet_USA$ALL_INF[(i-3):(i+3)]) > mean(FluNet_USA$ALL_INF[(i-4):(i+2)])){
+for(i in 10:nrow(FluNet_USA)){
+  if(is.na(FluNet_USA$cpm[i]) == FALSE & 
+     mean(FluNet_USA$ALL_INF[(i-5):(i+5)]) > mean(FluNet_USA$ALL_INF[(i-6):(i+4)]) &
+     sum(!is.na(FluNet_USA$cpm_criteria[(i-10):(i-1)])) == 0){
     FluNet_USA$cpm_criteria[i] <- FluNet_USA$SDATE[i]
   } else {
     FluNet_USA$cpm_criteria[i] <- NA
@@ -648,8 +665,62 @@ for(i in 4:nrow(FluNet_USA)){
 ggplot(data = FluNet_USA, aes(x = SDATE, y = ALL_INF)) + 
   geom_line(size = 0.75) +
   scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
-  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for USA with change points, cpm package") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for USA with change points, cpm package, 'Exponential' algorithm") + 
   geom_vline(xintercept = na.omit(FluNet_USA$cpm_criteria), lty = 2, col = "red")
+
+
+# Ecuador
+cpm_Ecu <- processStream(FluNet_Ecu$ALL_INF, cpmType = "Exponential", startup = 10, ARL0 = 500)
+# exponential method clearly worked best
+FluNet_Ecu$cpm <- NA
+FluNet_Ecu$cpm[cpm_Ecu$changePoints] <- FluNet_Ecu$SDATE[cpm_Ecu$changePoints]
+
+ggplot(data = FluNet_Ecu, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line(size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Ecuador with change points, cpm package, 'Exponential' algorithm") + 
+  geom_vline(xintercept = na.omit(FluNet_Ecu$cpm), lty = 2, col = "red")
+
+FluNet_Ecu$cpm_criteria <- NA
+for(i in 10:nrow(FluNet_Ecu)){
+  if(is.na(FluNet_Ecu$cpm[i]) == FALSE & 
+     mean(FluNet_Ecu$ALL_INF[(i-5):(i+5)]) > mean(FluNet_Ecu$ALL_INF[(i-6):(i+4)]) &
+     sum(!is.na(FluNet_Ecu$cpm_criteria[(i-10):(i-1)])) == 0){
+    FluNet_Ecu$cpm_criteria[i] <- FluNet_Ecu$SDATE[i]
+  } else {
+    FluNet_Ecu$cpm_criteria[i] <- NA
+  }
+}
+ggplot(data = FluNet_Ecu, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line(size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Ecuador with change points, cpm package, 'Exponential' algorithm") + 
+  geom_vline(xintercept = na.omit(FluNet_Ecu$cpm_criteria), lty = 2, col = "red")
+
+
+### summary of the bcp, ecp, and cpm packages
+# USA
+ggplot(data = FluNet_USA, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line(size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for USA with change points", color = "R package") + 
+  geom_vline(aes(xintercept = FluNet_USA$bcp_criteria, col = "BCP"), lty = 2, size = 0.75) + 
+  geom_vline(aes(xintercept = FluNet_USA$ecp_criteria, col = "ECP"), lty = 2, size = 0.75) + 
+  geom_vline(aes(xintercept = FluNet_USA$cpm_criteria, col = "CPM"), lty = 2, size = 0.75) + 
+  scale_color_manual(values = c("#cf0007", "#ff7903", "#006100")) + 
+  theme(legend.key.size = unit(1, "cm"))
+
+# Ecuador
+ggplot(data = FluNet_Ecu, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line(size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Ecuador with change points", color = "R package") + 
+  geom_vline(aes(xintercept = FluNet_Ecu$bcp_criteria, col = "BCP"), lty = 2, size = 0.75) + 
+  geom_vline(aes(xintercept = FluNet_Ecu$ecp_criteria, col = "ECP"), lty = 2, size = 0.75) + 
+  geom_vline(aes(xintercept = FluNet_Ecu$cpm_criteria, col = "CPM"), lty = 2, size = 0.75) + 
+  scale_color_manual(values = c("#cf0007", "#ff7903", "#006100")) + 
+  theme(legend.key.size = unit(1, "cm"))
+
 
 
 ##### Twitter BreakoutDetection#####
