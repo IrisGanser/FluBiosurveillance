@@ -8,6 +8,7 @@ library(qcc)
 library(surveillance)
 library(AnomalyDetection)
 library(BreakoutDetection)
+library(cpm)
 
 
 # load HealthMap data
@@ -102,6 +103,7 @@ Ecu_outbreak_C2_7 <- earsC(Ecu_sts, control = list(
 ))
 plot(Ecu_outbreak_C2_7, main = "Ecuador HM EARS C2, 7 weeks baseline")
 # Ecuador data are very sparse. At least it doesn't alert at one report per week, and one alert per spike in first or second week
+# actually doesn't look too bad, might be an option for countries with sparse data
 
 
 ## CUSUM method
@@ -130,6 +132,7 @@ plot(Ecu_2013_cusum, main = "Ecuador CUSUM with Rossi method")
 
 # CUSUM does not work at all! For USA, the threshold is too high with all data and too low with only 2013 data
 # Ecuador counts are too low for CUSUM to have any threshold apparently
+# CUSUM can't handle 0 counts
 
 
 ## Bayes algorithms
@@ -140,6 +143,7 @@ plot(USA_outbreak_b1, main = "USA HM with bayes(6, 6, 0)")
 Ecu_outbreak_b1 <- algo.bayes(Ecu_disProg, control = list(range = 10:length(observed(Ecu_sts)), alpha = 0.05, 
                                                           b = 0, w = 6))
 plot(Ecu_outbreak_b1, main = "Ecuador HM with bayes(6, 6, 0)")
+# ooes not look too bad for countries with sparse data, baseline length must be adjusted
 
 
 ## outbreakP algorithm (apparently especially suited for influenza outbreak detection)
@@ -157,6 +161,12 @@ plot(USA_2013_outbreakP, main = "USA HM OutbreakP")
 # too sensitive
 
 # Ecuador
+
+Ecu_outbreakP <- outbreakP(Ecu_sts, control = list(
+  range = 1:length(observed(Ecu_sts)), k = 100, ret = "cases"
+))
+plot(Ecu_outbreakP)
+
 Ecu_2013_outbreakP <- outbreakP(Ecu_2013_sts, control = list(
   range = 1:length(observed(Ecu_2013_sts)), k = 100, ret = "cases"
 ))
@@ -180,12 +190,13 @@ USA_sdcount_nep <- sd(HM_USA_nep$counts)
 USA_ewma_nep <- ewma(HM_USA$counts, lambda = 0.3, nsigmas = 3, center = USA_meancount_nep, std.dev = USA_sdcount_nep, 
                      title = "USA HM EWMA with baseline mean and SD")
 summary(USA_ewma_nep)
+# results look good when taking baseline mean and sd
 
 # Ecuador
 Ecu_ewma <- ewma(HM_Ecu$counts, lambda = 0.3, nsigmas = 3,
                  title = "Ecuador HM EWMA")
 summary(Ecu_ewma)
-
+# sparse data countries don't look too bad, because baseline is inherently low, but not too low
 
 
 ## AnomalyDetection library
@@ -206,6 +217,7 @@ anomalies_Ecu$plot
 # does not work at all, since every count is an anomaly now
 
 
+##### change point analysis #####
 ## bcp
 USA_bcp <- bcp(HM_USA$counts, burnin = 100, mcmc = 5000)
 plot(USA_bcp)
@@ -257,11 +269,73 @@ ggplot(data = HM_Ecu_allcp, aes(x = date, y = counts)) +
        caption = "Dashed vertical lines mark all change points") + 
   geom_vline(xintercept = na.omit(HM_Ecu_allcp$changepoint), lty = 2, col = "red")
 
+## cpm
+cpm_USA <- processStream(HM_USA$counts, cpmType = "Exponential", startup = 10, ARL0 = 500)
+# exponential method works, Lepage, Mood, Kolmogorov-Smirnov, Cramer-von-Mises too give all very similar results except Mood)
+HM_USA$cpm <- NA
+HM_USA$cpm[cpm_USA$changePoints] <- HM_USA$date[cpm_USA$changePoints]
+
+ggplot(data = HM_USA, aes(x = date, y = counts)) + 
+  geom_line(size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "Event counts", title = "HealthMap data for USA with change points, cpm package") + 
+  geom_vline(xintercept = na.omit(HM_USA$cpm), lty = 2, col = "red")
+
+# only CPs in rising curves
+HM_USA$cpm_criteria <- NA
+for(i in 4:nrow(HM_USA)){
+  # use running mean of +/- 3 observations to ensure that we are in the inreasing part of the curve
+  if(is.na(HM_USA$cpm[i]) == FALSE & mean(HM_USA$counts[(i-3):(i+3)]) > mean(HM_USA$counts[(i-4):(i+2)])){
+    HM_USA$cpm_criteria[i] <- HM_USA$date[i]
+  } else {
+    HM_USA$cpm_criteria[i] <- NA
+  }
+}
+ggplot(data = HM_USA, aes(x = date, y = counts)) + 
+  geom_line(size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "Event counts", title = "HealthMap data for USA with change points, cpm package") + 
+  geom_vline(xintercept = na.omit(HM_USA$cpm_criteria), lty = 2, col = "red") + 
+  geom_hline(yintercept = quantile(HM_USA$counts, 0.4))
+ 
+#Ecuador
+cpm_Ecu <- processStream(HM_Ecu$counts, cpmType = "Mann-Whitney", startup = 10, ARL0 = 500)
+# Mann-Whitney works well, Lepage, Mood, Kolmogorov-Smirnov, Cramer-von-Mises all give weird regular signals which makes no sense at all
+HM_Ecu$cpm <- NA
+HM_Ecu$cpm[cpm_Ecu$changePoints] <- HM_Ecu$date[cpm_Ecu$changePoints]
+
+ggplot(data = HM_Ecu, aes(x = date, y = counts)) + 
+  geom_line(size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "Event counts", title = "HealthMap data for Ecuador with change points, cpm package") + 
+  geom_vline(xintercept = na.omit(HM_Ecu$cpm), lty = 2, col = "red")
+
+# only CPs in rising curves
+HM_Ecu$cpm_criteria <- NA
+for(i in 6:nrow(HM_Ecu)){
+  # use running mean of +/- 5 observations to ensure that we are in the inreasing part of the curve
+  if(is.na(HM_Ecu$cpm[i]) == FALSE & mean(HM_Ecu$counts[(i-5):(i+5)]) > mean(HM_Ecu$counts[(i-6):(i+4)])){
+    HM_Ecu$cpm_criteria[i] <- HM_Ecu$date[i]
+  } else {
+    HM_Ecu$cpm_criteria[i] <- NA
+  }
+}
+ggplot(data = HM_Ecu, aes(x = date, y = counts)) + 
+  geom_line(size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "Event counts", title = "HealthMap data for Ecuador with change points, cpm package") + 
+  geom_vline(xintercept = na.omit(HM_Ecu$cpm_criteria), lty = 2, col = "red")
+
+
+
 
 ##### Twitter BreakoutDetection#####
 breakout_data_USA <- select(HM_USA, c(counts, date)) %>% rename(count = counts, timestamp = date)
 breakout_USA <- breakout(breakout_data_USA, min.size = 5, method = "multi", plot = TRUE, beta = 0.001)
 breakout_USA$plot
+
+
+breakout_data_Ecu <- select(HM_Ecu, c(counts, date)) %>% rename(count = counts, timestamp = date)
+breakout_Ecu <- breakout(breakout_data_Ecu, min.size = 5, method = "multi", plot = TRUE, beta = 0.001)
+breakout_Ecu$plot
 # does not work at all
-
-
