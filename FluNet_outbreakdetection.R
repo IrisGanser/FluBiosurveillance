@@ -728,3 +728,86 @@ breakout_data_USA <- select(FluNet_USA, c(ALL_INF, SDATE)) %>% rename(count = AL
 breakout_USA <- breakout(breakout_data_USA, min.size = 10, method = "multi", plot = TRUE)
 breakout_USA$plot
 # does not work at all, maybe better with HM or EIOS
+
+
+# potentially problematic countries because of data quality
+problematic_FluNet <- c("Brazil", "Costa Rica", "Egypt", "France", "India", "Nigeria", "Saudi Arabia", "Thailand", "Uruguay", "Vietnam")
+#'%!in%' <- function(x,y)!('%in%'(x,y))
+nonproblematic_FluNet <- subset(levels(FluNet_data$Country), !(levels(FluNet_data$Country) %in% problematic_FluNet))
+
+
+# apply bcp (with outbreak criteria) to all non-problematic countries 
+for (i in seq_along(nonproblematic_FluNet)) { 
+  FluNet_temp <- filter(FluNet_data, FluNet_data$Country==nonproblematic_FluNet[i])
+  
+  bcp_temp <- bcp(FluNet_temp$ALL_INF, burnin = 100, mcmc = 5000)
+  plot(bcp_temp)
+  
+  
+  FluNet_data$bcp.postprob[FluNet_data$Country==nonproblematic_FluNet[i]] <- bcp_temp$posterior.prob
+}
+
+for (i in seq_along(nonproblematic_FluNet)) { 
+  FluNet_temp <- filter(FluNet_data, FluNet_data$Country==nonproblematic_FluNet[i] & is.na(FluNet_data$bcp.postprob) == FALSE)
+  
+  FluNet_temp$bcp_criteria <- NA
+  for(j in 10:nrow(FluNet_temp)){
+    if(FluNet_temp$bcp.postprob[j] >= 0.5 & FluNet_temp$bcp.postprob[(j-1)] < 0.5 & # transition from non-epidemic to epidemic
+       mean(FluNet_temp$ALL_INF[(j-3):(j+3)], na.rm = TRUE) > mean(FluNet_temp$ALL_INF[(j-4):j], na.rm = TRUE) & # running mean to ensure that curve is rising (beware of spikes!)
+       sum(!is.na(FluNet_temp$bcp_criteria[(j-10):(j-1)])) == 0){ # No outbreak flagged during the previous 10 weeks
+      FluNet_temp$bcp_criteria[j] <- FluNet_temp$SDATE[j]
+    } else {
+      FluNet_temp$bcp_criteria[j] <- NA
+    }
+  }
+
+  plot <- ggplot(FluNet_temp, aes(x = SDATE, y = ALL_INF)) + 
+    geom_line(aes(col = bcp.postprob), size = 0.75) +
+    scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+    labs(x = "", y = "influenza case counts", 
+         title = paste("WHO FluNet data for", nonproblematic_FluNet[i], "with posterior probability of change point", sep = " ")) + 
+    geom_vline(xintercept = na.omit(FluNet_temp$bcp_criteria), lty = 2, col = "red")
+  
+  print(plot)
+  #ggsave(plot = plot, file = paste("FluNet bcp", country_list[i], ".jpeg", sep=' '))
+}
+
+
+
+# do the same with problematic countries and look at the resuls
+for (i in seq_along(problematic_FluNet)) { 
+  FluNet_temp <- filter(FluNet_data, FluNet_data$Country==problematic_FluNet[i])
+  
+  bcp_temp <- bcp(FluNet_temp$ALL_INF, burnin = 100, mcmc = 5000)
+  plot(bcp_temp)
+  
+  
+  FluNet_data$bcp.postprob[FluNet_data$Country==problematic_FluNet[i]] <- bcp_temp$posterior.prob
+}
+
+for (i in seq_along(problematic_FluNet)) { 
+  FluNet_temp <- filter(FluNet_data, FluNet_data$Country==problematic_FluNet[i] & is.na(FluNet_data$bcp.postprob) == FALSE)
+  
+  FluNet_temp$bcp_criteria <- NA
+  for(j in 10:nrow(FluNet_temp)){
+    if(FluNet_temp$bcp.postprob[j] >= 0.5 & FluNet_temp$bcp.postprob[(j-1)] < 0.5 & # transition from non-epidemic to epidemic
+       mean(FluNet_temp$ALL_INF[(j-3):(j+3)], na.rm = TRUE) > mean(FluNet_temp$ALL_INF[(j-4):j], na.rm = TRUE) & # running mean to ensure that curve is rising (beware of spikes!)
+       sum(!is.na(FluNet_temp$bcp_criteria[(j-10):(j-1)])) == 0){ # No outbreak flagged during the previous 10 weeks
+      FluNet_temp$bcp_criteria[j] <- FluNet_temp$SDATE[j]
+    } else {
+      FluNet_temp$bcp_criteria[j] <- NA
+    }
+  }
+  
+  plot <- ggplot(FluNet_temp, aes(x = SDATE, y = ALL_INF)) + 
+    geom_line(aes(col = bcp.postprob), size = 0.75) +
+    scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+    labs(x = "", y = "influenza case counts", 
+         title = paste("WHO FluNet data for", problematic_FluNet[i], "with posterior probability of change point", sep = " ")) + 
+    geom_vline(xintercept = na.omit(FluNet_temp$bcp_criteria), lty = 2, col = "red")
+  
+  print(plot)
+  #ggsave(plot = plot, file = paste("FluNet bcp", country_list[i], ".jpeg", sep=' '))
+}
+
+                                
