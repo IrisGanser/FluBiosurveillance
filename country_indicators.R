@@ -224,8 +224,8 @@ indicators$language <- languages
 indicators$problematic_FluNet <- ifelse(indicators$FluNet_total_cat == "low" | indicators$global_region == "tropical", 
                                         TRUE, FALSE)
 indicators$problematic_FluNet[indicators$country == "France"] <- TRUE
-not_problematic <- c("Germany", "Ecuador", "Bulgaria", "Greece", "Iran", "South Africa")
-indicators$problematic_FluNet[indicators$country %in% not_problematic] <- FALSE
+np <- c("Germany", "Ecuador", "Bulgaria", "Greece", "Iran", "South Africa")
+indicators$problematic_FluNet[indicators$country %in% np] <- FALSE
 indicators$country[indicators$problematic_FluNet == TRUE]
 
 indicators$problematic_EIOS <- ifelse(indicators$EIOS_total_cat == "low", TRUE, FALSE)
