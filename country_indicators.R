@@ -1,9 +1,10 @@
 library(ggplot2)
 library(plyr)
 library(readxl)
-library(dplyr)
 library(lubridate)
 library(stringr)
+library(dplyr)
+library(tidyr)
 
 ## load all data
 # load FluNet data
@@ -98,42 +99,66 @@ EIOS_byweek <- EIOSreports %>% group_by(date = floor_date(importDate, "week"), c
 
 
 ## visualize total counts of every source
-FluNet_total <- FluNet_data %>% group_by(Country) %>% summarize(count = sum(ALL_INF))
-ggplot(FluNet_total, aes(x = Country, y = count)) + 
+FluNet_total <- FluNet_data %>% group_by(Country) %>% summarize(total = sum(ALL_INF), max = max(ALL_INF))
+ggplot(FluNet_total, aes(x = Country, y = total)) + 
   geom_col(fill = "darkorange3") + 
-  geom_text(aes(label=count), position = position_stack(0.5)) + 
+  geom_text(aes(label=total), position = position_stack(0.5)) + 
   labs(title = "Total number of FluNet Influenza counts from January 2013 - December 2019", x = "") + 
   coord_flip() +
   scale_x_discrete(limits = rev(levels(FluNet_data$Country)))
 
-HM_total <- dataHM %>% group_by(country) %>% summarize(count = n())
-ggplot(HM_total, aes(x = country, y = count)) + 
+ggplot(FluNet_total, aes(x = Country, y = max)) + 
   geom_col(fill = "darkorange3") + 
-  geom_text(aes(label=count), position = position_stack(0.5)) + 
+  geom_text(aes(label=max), position = position_stack(0.5)) + 
+  labs(title = "Maximum weekly FluNet Influenza count from January 2013 - December 2019", x = "") + 
+  coord_flip() +
+  scale_x_discrete(limits = rev(levels(FluNet_data$Country)))
+
+#FluNet_total_long <- FluNet_total %>% pivot_longer(cols = c(total, max), names_to = "count_category", values_to = "counts")
+
+HM_total <- HM_byweek %>% group_by(country) %>% summarize(total = sum(counts), max = max(counts))
+ggplot(HM_total, aes(x = country, y = total)) + 
+  geom_col(fill = "darkorange3") + 
+  geom_text(aes(label=total), position = position_stack(0.5)) + 
   labs(title = "Total number of HealthMap events from January 2013 - July 2019", x = "") + 
   coord_flip() +
   scale_x_discrete(limits = rev(levels(dataHM$country))) + 
   scale_y_continuous(limits = c(0, 9300))
 
-EIOS_total <- EIOSreports %>% group_by(Country) %>% summarize(count = n())
-ggplot(EIOS_total, aes(x = Country, y = count)) + 
+ggplot(HM_total, aes(x = country, y = max)) + 
   geom_col(fill = "darkorange3") + 
-  geom_text(aes(label=count), position = position_stack(0.5)) + 
+  geom_text(aes(label=max), position = position_stack(0.5)) + 
+  labs(title = "Maximum weekly number of HealthMap events from January 2013 - July 2019", x = "") + 
+  coord_flip() +
+  scale_x_discrete(limits = rev(levels(dataHM$country)))
+
+EIOS_total <- EIOS_byweek %>% group_by(country) %>% summarize(total = sum(counts), max = max(counts))
+ggplot(EIOS_total, aes(x = country, y = total)) + 
+  geom_col(fill = "darkorange3") + 
+  geom_text(aes(label=total), position = position_stack(0.5)) + 
   labs(title = "Total number of EIOS events from November 2017 - December 2019", x = "") + 
   coord_flip() +
   scale_x_discrete(limits = rev(levels(dataHM$country))) 
 
+ggplot(EIOS_total, aes(x = country, y = max)) + 
+  geom_col(fill = "darkorange3") + 
+  geom_text(aes(label=max), position = position_stack(0.5)) + 
+  labs(title = "Maximum weekly number of EIOS events from November 2017 - December 2019", x = "") + 
+  coord_flip() +
+  scale_x_discrete(limits = rev(levels(dataHM$country))) 
+
+
 # divide into categories of data abundance ('high', 'medium', 'low')
-FluNet_total$count_cat <- cut(FluNet_total$count, 
-                              breaks = c(0, quantile(FluNet_total$count, probs = 0.5), quantile(FluNet_total$count, probs = 0.75), Inf),
+FluNet_total$total_cat <- cut(FluNet_total$total, 
+                              breaks = c(0, quantile(FluNet_total$total, probs = 0.5), quantile(FluNet_total$total, probs = 0.75), Inf),
                               labels = c("low", "medium", "high"))
 
-HM_total$count_cat <- cut(HM_total$count, 
-                          breaks = c(0, quantile(HM_total$count, probs = 0.5), quantile(HM_total$count, probs = 0.75), Inf),
+HM_total$total_cat <- cut(HM_total$total, 
+                          breaks = c(0, quantile(HM_total$total, probs = 0.5), quantile(HM_total$total, probs = 0.75), Inf),
                           labels = c("low", "medium", "high"))
 
-EIOS_total$count_cat <- cut(EIOS_total$count, 
-                            breaks = c(0, quantile(EIOS_total$count, probs = 0.5), quantile(EIOS_total$count, probs = 0.75), Inf),
+EIOS_total$total_cat <- cut(EIOS_total$total, 
+                            breaks = c(0, quantile(EIOS_total$total, probs = 0.5), quantile(EIOS_total$total, probs = 0.75), Inf),
                             labels = c("low", "medium", "high"))
 
 
@@ -149,8 +174,8 @@ influenza_zones$country_name <- revalue(influenza_zones$country_name,
 influenza_zones$country_name <- as.factor(influenza_zones$country_name)
 
 
-indicators <- data.frame(country = FluNet_total$Country, FluNet_count_cat = FluNet_total$count_cat, 
-                         HM_count_cat = HM_total$count_cat, EIOS_count_cat = EIOS_total$count_cat)
+indicators <- data.frame(country = FluNet_total$Country, FluNet_total_cat = FluNet_total$total_cat, 
+                         HM_total_cat = HM_total$total_cat, EIOS_total_cat = EIOS_total$total_cat)
 indicators <- left_join(indicators, influenza_zones, by = c("country" = "country_name"))
 indicators$country <- as.factor(indicators$country)
 indicators$influenza_transmission_zone <- as.factor(indicators$influenza_transmission_zone)
@@ -182,3 +207,14 @@ languages <- c("Spanish", "English", "Portuguese", "Bulgarian", "Mandarin", "Spa
                "German", "Greek", "Hindi", "Farsi", "Spanish", "English", "Russian", "Arabic", "Afrikaans", "Swedish",
                "Thai", "English", "English", "Spanish", "Vietnamese")
 indicators$language <- languages
+
+
+indicators$problematic_FluNet <- ifelse(indicators$FluNet_total_cat == "low" | indicators$global_region == "tropical", 
+                                        TRUE, FALSE)
+indicators$problematic_FluNet[indicators$country == "France"] <- TRUE
+not_problematic <- c("Germany", "Ecuador", "Bulgaria", "Greece", "Iran", "South Africa")
+indicators$problematic_FluNet[indicators$country %in% not_problematic] <- FALSE
+indicators$country[indicators$problematic_FluNet == TRUE]
+
+indicators$problematic_EBS <- ifelse(indicators$HM_total_cat == "low" | indicators$EIOS_total_cat == "low", TRUE, FALSE)
+indicators$country[indicators$problematic_EBS == TRUE]
