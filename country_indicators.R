@@ -102,50 +102,62 @@ EIOS_byweek <- EIOSreports %>% group_by(date = floor_date(importDate, "week"), c
 FluNet_total <- FluNet_data %>% group_by(Country) %>% summarize(total = sum(ALL_INF), max = max(ALL_INF))
 ggplot(FluNet_total, aes(x = Country, y = total)) + 
   geom_col(fill = "darkorange3") + 
-  geom_text(aes(label=total), position = position_stack(0.5)) + 
+  geom_text(aes(label=total, y = -50000)) + 
   labs(title = "Total number of FluNet Influenza counts from January 2013 - December 2019", x = "") + 
   coord_flip() +
-  scale_x_discrete(limits = rev(levels(FluNet_data$Country)))
+  scale_x_discrete(limits = rev(levels(FluNet_data$Country))) + 
+  scale_y_continuous(limits = c(-50000, 1050000)) + 
+  geom_hline(yintercept = quantile(FluNet_total$total, probs = c(0.5, 0.75)), lty = 2, col = "red")
 
 ggplot(FluNet_total, aes(x = Country, y = max)) + 
   geom_col(fill = "darkorange3") + 
-  geom_text(aes(label=max), position = position_stack(0.5)) + 
+  geom_text(aes(label=max, y = -900)) + 
   labs(title = "Maximum weekly FluNet Influenza count from January 2013 - December 2019", x = "") + 
   coord_flip() +
-  scale_x_discrete(limits = rev(levels(FluNet_data$Country)))
+  scale_y_continuous(limits = c(-900, 27000)) +
+  scale_x_discrete(limits = rev(levels(FluNet_data$Country))) + 
+  geom_hline(yintercept = quantile(FluNet_total$max, probs = c(0.5, 0.75)), lty = 2, col = "red")
 
 #FluNet_total_long <- FluNet_total %>% pivot_longer(cols = c(total, max), names_to = "count_category", values_to = "counts")
 
 HM_total <- HM_byweek %>% group_by(country) %>% summarize(total = sum(counts), max = max(counts))
 ggplot(HM_total, aes(x = country, y = total)) + 
   geom_col(fill = "darkorange3") + 
-  geom_text(aes(label=total), position = position_stack(0.5)) + 
+  geom_text(aes(y = -250, label=total)) + 
   labs(title = "Total number of HealthMap events from January 2013 - July 2019", x = "") + 
   coord_flip() +
   scale_x_discrete(limits = rev(levels(dataHM$country))) + 
-  scale_y_continuous(limits = c(0, 9300))
+  scale_y_continuous(limits = c(-250, 9300)) + 
+  geom_hline(yintercept = quantile(HM_total$total, probs = c(0.5, 0.75)), lty = 2, col = "red")
 
 ggplot(HM_total, aes(x = country, y = max)) + 
   geom_col(fill = "darkorange3") + 
-  geom_text(aes(label=max), position = position_stack(0.5)) + 
+  geom_text(aes(label=max, y = -10)) + 
   labs(title = "Maximum weekly number of HealthMap events from January 2013 - July 2019", x = "") + 
   coord_flip() +
-  scale_x_discrete(limits = rev(levels(dataHM$country)))
+  scale_y_continuous(limits = c(-10, 400)) +
+  scale_x_discrete(limits = rev(levels(dataHM$country))) + 
+  geom_hline(yintercept = quantile(HM_total$max, probs = c(0.5, 0.75)), lty = 2, col = "red")
+
 
 EIOS_total <- EIOS_byweek %>% group_by(country) %>% summarize(total = sum(counts), max = max(counts))
 ggplot(EIOS_total, aes(x = country, y = total)) + 
   geom_col(fill = "darkorange3") + 
-  geom_text(aes(label=total), position = position_stack(0.5)) + 
+  geom_text(aes(label=total, y = -1000)) + 
   labs(title = "Total number of EIOS events from November 2017 - December 2019", x = "") + 
   coord_flip() +
-  scale_x_discrete(limits = rev(levels(dataHM$country))) 
+  scale_x_discrete(limits = rev(levels(dataHM$country))) + 
+  scale_y_continuous(limits = c(-1000, 28000)) +
+  geom_hline(yintercept = quantile(EIOS_total$total, probs = c(0.5, 0.75)), lty = 2, col = "red")
 
 ggplot(EIOS_total, aes(x = country, y = max)) + 
   geom_col(fill = "darkorange3") + 
-  geom_text(aes(label=max), position = position_stack(0.5)) + 
+  geom_text(aes(label=max, y = - 50)) + 
   labs(title = "Maximum weekly number of EIOS events from November 2017 - December 2019", x = "") + 
   coord_flip() +
-  scale_x_discrete(limits = rev(levels(dataHM$country))) 
+  scale_y_continuous(limits = c(-50, 1250)) +
+  scale_x_discrete(limits = rev(levels(dataHM$country))) +
+  geom_hline(yintercept = quantile(EIOS_total$max, probs = c(0.5, 0.75)), lty = 2, col = "red")
 
 
 # divide into categories of data abundance ('high', 'medium', 'low')
@@ -203,7 +215,7 @@ for(i in 1:nrow(indicators)){
   }
 }
 
-languages <- c("Spanish", "English", "Portuguese", "Bulgarian", "Mandarin", "Spanish", "Spanish", "Arabic", "French",
+languages <- c("Spanish", "English", "Portuguese", "Bulgarian", "Chinese", "Spanish", "Spanish", "Arabic", "French",
                "German", "Greek", "Hindi", "Farsi", "Spanish", "English", "Russian", "Arabic", "Afrikaans", "Swedish",
                "Thai", "English", "English", "Spanish", "Vietnamese")
 indicators$language <- languages
@@ -216,5 +228,8 @@ not_problematic <- c("Germany", "Ecuador", "Bulgaria", "Greece", "Iran", "South 
 indicators$problematic_FluNet[indicators$country %in% not_problematic] <- FALSE
 indicators$country[indicators$problematic_FluNet == TRUE]
 
-indicators$problematic_EBS <- ifelse(indicators$HM_total_cat == "low" | indicators$EIOS_total_cat == "low", TRUE, FALSE)
-indicators$country[indicators$problematic_EBS == TRUE]
+indicators$problematic_EIOS <- ifelse(indicators$EIOS_total_cat == "low", TRUE, FALSE)
+indicators$country[indicators$problematic_EIOS == TRUE]
+
+indicators$problematic_HM <- ifelse(indicators$HM_total_cat == "low", TRUE, FALSE)
+indicators$country[indicators$problematic_HM == TRUE]
