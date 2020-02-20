@@ -60,13 +60,12 @@ overseas_territories <- c("Bermuda [UK]", "CollectivitÃ© d'outre-mer de Saint 
                           "RÃ©gion d'outre-mer de French Guiana, France", "RÃ©gion d'outre-mer de RÃ©union, France", 
                           "RÃ©gion d'outre-mer de Guadeloupe, France", "RÃ©gion d'outre-mer de Martinique, France", 
                           "American Samoa [USA]", "Northern Mariana Islands [United States]", "Guam [USA]")
-
+dataHM <- filter(dataHM, !(country %in% overseas_territories | place_name %in% overseas_territories))
+dataHM$country <- factor(dataHM$country)
 
 HM_byweek <- dataHM %>% group_by(date = floor_date(load_date, "week"), country = country, .drop = FALSE) %>%
   summarize(counts=n()) %>% as.data.frame()
 
-HM_byweek <- dplyr::filter(HM_byweek, !(country %in% overseas_territories))
-HM_byweek$country <- factor(HM_byweek$country)
 
 
 # load EIOS data
