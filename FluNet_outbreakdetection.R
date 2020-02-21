@@ -737,6 +737,7 @@ nonproblematic_FluNet <- subset(levels(FluNet_data$Country), !(levels(FluNet_dat
 
 
 # apply bcp (with outbreak criteria) to all non-problematic countries 
+i <- 1
 for (i in seq_along(nonproblematic_FluNet)) { 
   FluNet_temp <- filter(FluNet_data, FluNet_data$Country==nonproblematic_FluNet[i])
   
@@ -747,6 +748,8 @@ for (i in seq_along(nonproblematic_FluNet)) {
   FluNet_data$bcp.postprob[FluNet_data$Country==nonproblematic_FluNet[i]] <- bcp_temp$posterior.prob
 }
 
+i <- 1
+j <- 1
 for (i in seq_along(nonproblematic_FluNet)) { 
   FluNet_temp <- filter(FluNet_data, FluNet_data$Country==nonproblematic_FluNet[i] & is.na(FluNet_data$bcp.postprob) == FALSE)
   
@@ -775,6 +778,7 @@ for (i in seq_along(nonproblematic_FluNet)) {
 
 
 # do the same with problematic countries and look at the resuls
+i <- 1
 for (i in seq_along(problematic_FluNet)) { 
   FluNet_temp <- filter(FluNet_data, FluNet_data$Country==problematic_FluNet[i])
   
@@ -785,6 +789,8 @@ for (i in seq_along(problematic_FluNet)) {
   FluNet_data$bcp.postprob[FluNet_data$Country==problematic_FluNet[i]] <- bcp_temp$posterior.prob
 }
 
+i <- 1
+j <- 1
 for (i in seq_along(problematic_FluNet)) { 
   FluNet_temp <- filter(FluNet_data, FluNet_data$Country==problematic_FluNet[i] & is.na(FluNet_data$bcp.postprob) == FALSE)
   
@@ -807,7 +813,148 @@ for (i in seq_along(problematic_FluNet)) {
     geom_vline(xintercept = na.omit(FluNet_temp$bcp_criteria), lty = 2, col = "red")
   
   print(plot)
-  #ggsave(plot = plot, file = paste("FluNet bcp", country_list[i], ".jpeg", sep=' '))
+  #ggsave(plot = plot, file = paste("FluNet bcp", problematic_FluNet[i], ".jpeg", sep=' '))
 }
 
-                                
+
+# print plots for all countries because it somehow does not work separately
+i <- 1
+j <- 1
+for (i in seq_along(country_list)) { 
+  FluNet_temp <- filter(FluNet_data, FluNet_data$Country==country_list[i] & is.na(FluNet_data$bcp.postprob) == FALSE)
+  
+  FluNet_temp$bcp_criteria <- NA
+  for(j in 10:nrow(FluNet_temp)){
+    if(FluNet_temp$bcp.postprob[j] >= 0.5 & FluNet_temp$bcp.postprob[(j-1)] < 0.5 & # transition from non-epidemic to epidemic
+       mean(FluNet_temp$ALL_INF[(j-3):(j+3)], na.rm = TRUE) > mean(FluNet_temp$ALL_INF[(j-4):j], na.rm = TRUE) & # running mean to ensure that curve is rising (beware of spikes!)
+       sum(!is.na(FluNet_temp$bcp_criteria[(j-10):(j-1)])) == 0){ # No outbreak flagged during the previous 10 weeks
+      FluNet_temp$bcp_criteria[j] <- FluNet_temp$SDATE[j]
+    } else {
+      FluNet_temp$bcp_criteria[j] <- NA
+    }
+  }
+  
+  plot <- ggplot(FluNet_temp, aes(x = SDATE, y = ALL_INF)) + 
+    geom_line(aes(col = bcp.postprob), size = 0.75) +
+    scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+    labs(x = "", y = "influenza case counts", 
+         title = paste("WHO FluNet data for", country_list[i], "with posterior probability of change point", sep = " ")) + 
+    geom_vline(xintercept = na.omit(FluNet_temp$bcp_criteria), lty = 2, col = "red")
+  
+  print(plot)
+  ggsave(plot = plot, file = paste("FluNet bcp", country_list[i], ".jpeg", sep=' '))
+}  
+
+
+
+
+##### try other methods for "problematic" countries #####
+FluNet_Egy <- filter(FluNet_data, Country == "Egypt") %>% dplyr::select(c(SDATE, ALL_INF))
+FluNet_Nig <- filter(FluNet_data, Country == "Nigeria") %>% dplyr::select(c(SDATE, ALL_INF))
+FluNet_Tha <- filter(FluNet_data, Country == "Thailand") %>% dplyr::select(c(SDATE, ALL_INF))
+FluNet_Vnm <- filter(FluNet_data, Country == "Vietnam") %>% dplyr::select(c(SDATE, ALL_INF))
+
+FluNet_Egy_Counts <- FluNet_Egy$ALL_INF
+FluNet_Egy_Epoch <- as.Date(FluNet_Egy$SDATE)
+Egy_sts <- sts(observed = FluNet_Egy_Counts, epoch = FluNet_Egy_Epoch, epochAsDate = TRUE)
+
+FluNet_Nig_Counts <- FluNet_Nig$ALL_INF
+FluNet_Nig_Epoch <- as.Date(FluNet_Nig$SDATE)
+Nig_sts <- sts(observed = FluNet_Nig_Counts, epoch = FluNet_Nig_Epoch, epochAsDate = TRUE)
+
+FluNet_Tha_Counts <- FluNet_Tha$ALL_INF
+FluNet_Tha_Epoch <- as.Date(FluNet_Tha$SDATE)
+Tha_sts <- sts(observed = FluNet_Tha_Counts, epoch = FluNet_Tha_Epoch, epochAsDate = TRUE)
+
+FluNet_Vnm_Counts <- FluNet_Vnm$ALL_INF
+FluNet_Vnm_Epoch <- as.Date(FluNet_Vnm$SDATE)
+Vnm_sts <- sts(observed = FluNet_Vnm_Counts, epoch = FluNet_Vnm_Epoch, epochAsDate = TRUE)
+
+
+## EARS algorithms
+# 7 weeks baseline
+Nig_outbreak_C2_7 <- earsC(Nig_sts, control = list(
+  method = "C2", baseline = 7, minSigma = 1, alpha = 0.01
+))
+plot(Nig_outbreak_C2_7, main = "Nigeria EARS C2, 7 weeks baseline")
+
+Egy_outbreak_C2_7 <- earsC(Egy_sts, control = list(
+  method = "C2", baseline = 7, minSigma = 1, alpha = 0.01
+))
+plot(Egy_outbreak_C2_7, main = "Egypt EARS C2, 7 weeks baseline")
+
+Tha_outbreak_C2_7 <- earsC(Tha_sts, control = list(
+  method = "C2", baseline = 7, minSigma = 1, alpha = 0.01
+))
+plot(Tha_outbreak_C2_7, main = "Thailand EARS C2, 7 weeks baseline")
+
+Vnm_outbreak_C2_7 <- earsC(Vnm_sts, control = list(
+  method = "C2", baseline = 7, minSigma = 1, alpha = 0.01
+))
+plot(Vnm_outbreak_C2_7, main = "Vietnam EARS C2, 7 weeks baseline")
+
+
+# 14 weeks baseline
+Nig_outbreak_C2_14 <- earsC(Nig_sts, control = list(
+  method = "C2", baseline = 14, minSigma = 1, alpha = 0.01
+))
+plot(Nig_outbreak_C2_14, main = "Nigeria EARS C2, 14 weeks baseline")
+
+Egy_outbreak_C2_14 <- earsC(Egy_sts, control = list(
+  method = "C2", baseline = 14, minSigma = 1, alpha = 0.01
+))
+plot(Egy_outbreak_C2_14, main = "Egypt EARS C2, 14 weeks baseline")
+
+Tha_outbreak_C2_14 <- earsC(Tha_sts, control = list(
+  method = "C2", baseline = 14, minSigma = 1, alpha = 0.01
+))
+plot(Tha_outbreak_C2_14, main = "Thailand EARS C2, 14 weeks baseline")
+
+Vnm_outbreak_C2_14 <- earsC(Vnm_sts, control = list(
+  method = "C2", baseline = 14, minSigma = 1, alpha = 0.01
+))
+plot(Vnm_outbreak_C2_14, main = "Vietnam EARS C2, 14 weeks baseline")
+
+
+## EWMA
+Egy_ewma <- ewma(FluNet_Egy$ALL_INF, lambda = 0.3, nsigmas = 3,
+                 title = "Egypt EWMA")
+
+Nig_ewma <- ewma(FluNet_Nig$ALL_INF, lambda = 0.3, nsigmas = 3,
+                 title = "Nigeria EWMA")
+
+Tha_ewma <- ewma(FluNet_Tha$ALL_INF, lambda = 0.3, nsigmas = 3,
+                 title = "Thailand EWMA")
+
+Vnm_ewma <- ewma(FluNet_Vnm$ALL_INF, lambda = 0.3, nsigmas = 3,
+                 title = "Vietnam EWMA")
+
+
+## cpm package
+
+cpm_Egy <- processStream(FluNet_Egy$ALL_INF, cpmType = "Cramer-von-Mises", startup = 10, ARL0 = 500)
+
+FluNet_Egy$cpm <- NA
+FluNet_Egy$cpm[cpm_Egy$changePoints] <- FluNet_Egy$SDATE[cpm_Egy$changePoints]
+
+ggplot(data = FluNet_Egy, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line(size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Egypt with change points, cpm package, 'Cramer-von-Mises' algorithm") + 
+  geom_vline(xintercept = na.omit(FluNet_Egy$cpm), lty = 2, col = "red")
+
+FluNet_Egy$cpm_criteria <- NA
+for(i in 10:nrow(FluNet_Egy)){
+  if(is.na(FluNet_Egy$cpm[i]) == FALSE & 
+     mean(FluNet_Egy$ALL_INF[(i-3):(i+3)]) > mean(FluNet_Egy$ALL_INF[(i-4):(i+2)]) &
+     sum(!is.na(FluNet_Egy$cpm_criteria[(i-10):(i-1)])) == 0){
+    FluNet_Egy$cpm_criteria[i] <- FluNet_Egy$SDATE[i]
+  } else {
+    FluNet_Egy$cpm_criteria[i] <- NA
+  }
+}
+ggplot(data = FluNet_Egy, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line(size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Egypt with change points, cpm package, 'Exponential' algorithm") + 
+  geom_vline(xintercept = na.omit(FluNet_Egy$cpm_criteria), lty = 2, col = "red")
