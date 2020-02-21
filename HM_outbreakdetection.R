@@ -102,6 +102,11 @@ Ecu_outbreak_C2_7 <- earsC(Ecu_sts, control = list(
   method = "C2", baseline = 7, minSigma = 1, alpha = 0.01
 ))
 plot(Ecu_outbreak_C2_7, main = "Ecuador HM EARS C2, 7 weeks baseline")
+
+Ecu_outbreak_C2_14 <- earsC(Ecu_sts, control = list(
+  method = "C2", baseline = 14, minSigma = 1, alpha = 0.01
+))
+plot(Ecu_outbreak_C2_14, main = "Ecuador HM EARS C2, 7 weeks baseline")
 # Ecuador data are very sparse. At least it doesn't alert at one report per week, and one alert per spike in first or second week
 # actually doesn't look too bad, might be an option for countries with sparse data
 
@@ -243,6 +248,25 @@ ggplot(data = HM_USA_allcp, aes(x = date, y = counts)) +
   labs(x = "", y = "influenza case counts", title = "HealthMap data for USA with posterior probability of change point",
        caption = "Dashed vertical lines mark all change points") + 
   geom_vline(xintercept = na.omit(HM_USA_allcp$changepoint), lty = 2, col = "red")
+
+
+# with established outbreak criteria
+HM_USA$bcp_criteria <- NA
+for(i in 10:nrow(HM_USA)){
+  if(HM_USA$bcp.postprob[i] >= 0.5 & HM_USA$bcp.postprob[(i-1)] < 0.5 & # transition from non-epidemic to epidemic
+     mean(HM_USA$counts[(i-3):(i+3)]) > mean(HM_USA$counts[(i-4):i]) & # running mean to ensure that curve is rising
+     sum(!is.na(HM_USA$bcp_criteria[(i-10):(i-1)])) == 0){ # No outbreak flagged during the previous 5 weeks
+    HM_USA$bcp_criteria[i] <- HM_USA$date[i]
+  } else {
+    HM_USA$bcp_criteria[i] <- NA
+  }
+}
+ggplot(data = HM_USA, aes(x = date, y = counts)) + 
+  geom_line(aes(col = bcp.postprob), size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "Healthmap data for USA with posterior probability of change point") + 
+  geom_vline(xintercept = na.omit(HM_USA$bcp_criteria), lty = 2, col = "red")
+
 
 # Ecuador
 Ecu_bcp <- bcp(HM_Ecu$counts, burnin = 100, mcmc = 5000)
