@@ -956,5 +956,93 @@ for(i in 10:nrow(FluNet_Egy)){
 ggplot(data = FluNet_Egy, aes(x = SDATE, y = ALL_INF)) + 
   geom_line(size = 0.75) +
   scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
-  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Egypt with change points, cpm package, 'Exponential' algorithm") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Egypt with change points, cpm package, 'Cramer-von-Mises' algorithm") + 
   geom_vline(xintercept = na.omit(FluNet_Egy$cpm_criteria), lty = 2, col = "red")
+
+
+# Nigeria
+cpm_Nig <- processStream(FluNet_Nig$ALL_INF, cpmType = "Mann-Whitney", startup = 10, ARL0 = 500)
+
+FluNet_Nig$cpm <- NA
+FluNet_Nig$cpm[cpm_Nig$changePoints] <- FluNet_Nig$SDATE[cpm_Nig$changePoints]
+
+ggplot(data = FluNet_Nig, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line(size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Nigeria with change points, cpm package, 'Mann-Whitney' algorithm") + 
+  geom_vline(xintercept = na.omit(FluNet_Nig$cpm), lty = 2, col = "red")
+
+FluNet_Nig$cpm_criteria <- NA
+for(i in 10:nrow(FluNet_Nig)){
+  if(is.na(FluNet_Nig$cpm[i]) == FALSE & 
+     mean(FluNet_Nig$ALL_INF[(i-3):(i+3)]) > mean(FluNet_Nig$ALL_INF[(i-4):(i+2)]) &
+     sum(!is.na(FluNet_Nig$cpm_criteria[(i-10):(i-1)])) == 0){
+    FluNet_Nig$cpm_criteria[i] <- FluNet_Nig$SDATE[i]
+  } else {
+    FluNet_Nig$cpm_criteria[i] <- NA
+  }
+}
+ggplot(data = FluNet_Nig, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line(size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Nigeria with change points, cpm package, 'Mann-Whitney' algorithm") + 
+  geom_vline(xintercept = na.omit(FluNet_Nig$cpm_criteria), lty = 2, col = "red")
+
+
+# Thailand
+cpm_Tha <- processStream(FluNet_Tha$ALL_INF, cpmType = "Mann-Whitney", startup = 10, ARL0 = 500)
+
+FluNet_Tha$cpm <- NA
+FluNet_Tha$cpm[cpm_Tha$changePoints] <- FluNet_Tha$SDATE[cpm_Tha$changePoints]
+
+ggplot(data = FluNet_Tha, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line(size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Thailand with change points, cpm package, 'Mann-Whitney' algorithm") + 
+  geom_vline(xintercept = na.omit(FluNet_Tha$cpm), lty = 2, col = "red")
+
+FluNet_Tha$cpm_criteria <- NA
+for(i in 10:nrow(FluNet_Tha)){
+  if(is.na(FluNet_Tha$cpm[i]) == FALSE & 
+     mean(FluNet_Tha$ALL_INF[(i-3):(i+3)]) > mean(FluNet_Tha$ALL_INF[(i-4):(i+2)]) &
+     sum(!is.na(FluNet_Tha$cpm_criteria[(i-10):(i-1)])) == 0){
+    FluNet_Tha$cpm_criteria[i] <- FluNet_Tha$SDATE[i]
+  } else {
+    FluNet_Tha$cpm_criteria[i] <- NA
+  }
+}
+ggplot(data = FluNet_Tha, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line(size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Thailand with change points, cpm package, 'Mann-Whitney' algorithm") + 
+  geom_vline(xintercept = na.omit(FluNet_Tha$cpm_criteria), lty = 2, col = "red")
+
+
+# Vietnam
+cpm_Vnm <- processStream(FluNet_Vnm$ALL_INF, cpmType = "Mann-Whitney", startup = 10, ARL0 = 500)
+
+FluNet_Vnm$cpm <- NA
+FluNet_Vnm$cpm[cpm_Vnm$changePoints] <- FluNet_Vnm$SDATE[cpm_Vnm$changePoints]
+
+ggplot(data = FluNet_Vnm, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line(size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Vietnam with change points, cpm package, 'Mann-Whitney' algorithm") + 
+  geom_vline(xintercept = na.omit(FluNet_Vnm$cpm), lty = 2, col = "red")
+
+FluNet_Vnm$cpm_criteria <- NA
+for(i in 10:nrow(FluNet_Vnm)){
+  if(is.na(FluNet_Vnm$cpm[i]) == FALSE & 
+     mean(FluNet_Vnm$ALL_INF[(i-3):(i+3)]) > mean(FluNet_Vnm$ALL_INF[(i-4):(i+2)]) &
+     sum(!is.na(FluNet_Vnm$cpm_criteria[(i-10):(i-1)])) == 0){
+    FluNet_Vnm$cpm_criteria[i] <- FluNet_Vnm$SDATE[i]
+  } else {
+    FluNet_Vnm$cpm_criteria[i] <- NA
+  }
+}
+ggplot(data = FluNet_Vnm, aes(x = SDATE, y = ALL_INF)) + 
+  geom_line(size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+  labs(x = "", y = "influenza case counts", title = "WHO FluNet data for Vietnam with change points, cpm package, 'Mann-Whitney' algorithm") + 
+  geom_vline(xintercept = na.omit(FluNet_Vnm$cpm_criteria), lty = 2, col = "red")
+
