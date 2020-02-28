@@ -261,4 +261,198 @@ ggplot(data = FluNet_Ecu, aes(x = SDATE, y = ALL_INF)) +
 
 
 
+### now write functions to implement this on the whole FluNet dataset
 
+## smoothing according to data abundance 
+# all countries with cubic  method looks good visually
+FluNet_total <- FluNet_data %>% group_by(Country) %>% summarize(total = sum(ALL_INF), max = max(ALL_INF))
+FluNet_total$total_cat <- cut(FluNet_total$total, 
+                              breaks = c(0, quantile(FluNet_total$total, probs = 0.5), quantile(FluNet_total$total, probs = 0.75), Inf),
+                              labels = c("low", "medium", "high"))
+
+poor_quality_countries <- c("Nigeria", "Thailand", "Vietnam")
+FluNet_low_countries <- as.character(FluNet_total$Country[FluNet_total$total_cat == "low"])
+# FluNet_low_countries <- FluNet_low_countries[!FluNet_low_countries %in% poor_quality_countries]
+
+
+count_smooth_USA <- loess(FluNet_USA$ALL_INF ~ as.numeric(FluNet_USA$SDATE), span = 0.09, degree = 1)
+FluNet_USA$count_smooth <- count_smooth_USA$fitted
+
+
+FluNet_data$count_smooth <- NA
+for (i in seq_along(country_list)) { 
+  FluNet_temp <- filter(FluNet_data, FluNet_data$Country==country_list[i])
+  if(i %in% FluNet_low_countries){
+    count_smooth_temp <- loess(FluNet_temp$ALL_INF ~ as.numeric(FluNet_temp$SDATE), span = 0.09, degree = 2)
+    FluNet_data$count_smooth[FluNet_data$Country==country_list[i]] <- count_smooth_temp$fitted
+  }else{
+    count_smooth_temp <- loess(FluNet_temp$ALL_INF ~ as.numeric(FluNet_temp$SDATE), span = 0.09, degree = 1)
+    FluNet_data$count_smooth[FluNet_data$Country==country_list[i]] <- count_smooth_temp$fitted
+  }
+}
+
+
+for (i in seq_along(country_list)) {
+  FluNet_temp <- filter(FluNet_data, FluNet_data$Country==country_list[i])
+  
+  plot <- ggplot(FluNet_temp, aes(x = SDATE, y = ALL_INF)) + 
+    geom_line(size = 0.75) +
+    scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+    labs(x = "", y = "influenza case counts", 
+         title = paste("WHO FluNet data for", country_list[i], "with posterior probability of change point", sep = " ")) + 
+    geom_line(aes(y = count_smooth), col = "red")
+  
+  print(plot)
+}
+
+
+## apply bcp and criteria for beginning/end of epidemics
+# bcp
+for (i in seq_along(country_list)) { 
+  FluNet_temp <- filter(FluNet_data, FluNet_data$Country==country_list[i])
+  
+  bcp_temp <- bcp(FluNet_temp$ALL_INF, burnin = 100, mcmc = 5000)
+  FluNet_data$bcp.postprob[FluNet_data$Country==country_list[i]] <- bcp_temp$posterior.prob
+}
+
+
+# apply criteria for start of epidemics
+FluNet_data$bcp_start <- NA
+for (i in seq_along(country_list)) { 
+  FluNet_temp <- filter(FluNet_data, FluNet_data$Country==country_list[i] & is.na(FluNet_data$bcp.postprob) == FALSE)
+  
+  for(j in 4:13){ # first few rows without looking back for previous outbreak
+    if(FluNet_temp$bcp.postprob[j] >= 0.5 & FluNet_temp$bcp.postprob[j-1] < 0.5 &
+       FluNet_temp$count_smooth[j] > FluNet_temp$count_smooth[j-1]){
+      FluNet_temp$bcp_start[j] <- FluNet_temp$SDATE[j]
+    } else {
+      FluNet_temp$bcp_start[j] <- NA
+    }
+  }
+  for(j in 10:nrow(FluNet_temp)){
+    if(FluNet_temp$bcp.postprob[j] >= 0.5 & FluNet_temp$bcp.postprob[(j-1)] < 0.5 & # transition from non-epidemic to epidemic
+       FluNet_temp$count_smooth[j] > FluNet_temp$count_smooth[j-1] & # running mean to ensure that curve is rising (beware of spikes!)
+       sum(!is.na(FluNet_temp$bcp_start[(j-10):(j-1)])) == 0){ # No outbreak flagged during the previous 10 weeks
+      FluNet_temp$bcp_start[j] <- FluNet_temp$SDATE[j]
+    } else {
+      FluNet_temp$bcp_start[j] <- NA
+    }
+  }
+  FluNet_data$bcp_start[FluNet_data$Country==country_list[i]] <- FluNet_temp$bcp_start
+}
+
+# for (i in seq_along(country_list)) { 
+#   FluNet_temp <- filter(FluNet_data, FluNet_data$Country==country_list[i] & is.na(FluNet_data$bcp.postprob) == FALSE)
+#   
+#   plot <- ggplot(FluNet_temp, aes(x = SDATE, y = ALL_INF)) + 
+#     geom_line(aes(col = bcp.postprob), size = 0.75) +
+#     scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+#     labs(x = "", y = "influenza case counts", 
+#        title = paste("WHO FluNet data for", country_list[i], "with posterior probability of change point", sep = " ")) + 
+#     geom_vline(xintercept = na.omit(FluNet_temp$bcp_start), lty = 2, col = "red")
+# 
+#   print(plot)
+# }
+
+
+#  apply criteria for end of epidemics
+FluNet_data$bcp_end <- NA
+for (i in seq_along(country_list)) { 
+  FluNet_temp <- filter(FluNet_data, FluNet_data$Country==country_list[i] & is.na(FluNet_data$bcp.postprob) == FALSE)
+  
+  for(j in (nrow(FluNet_temp)- 9):4){# run in reverse because otherwise, third criterion cannot be recognized
+    if(FluNet_temp$bcp.postprob[j] >= 0.5 & FluNet_temp$bcp.postprob[(j+1)] < 0.5 & # transition from non-epidemic to epidemic
+       FluNet_temp$count_smooth[j] > FluNet_temp$count_smooth[j+1] & # running mean to ensure that curve is rising (beware of spikes!)
+       sum(!is.na(FluNet_temp$bcp_end[(j+1):(j+15)])) == 0){ # No outbreak flagged during the previous 17 weeks
+      FluNet_temp$bcp_end[j] <- FluNet_temp$SDATE[j]
+    } else {
+      FluNet_temp$bcp_end[j] <- NA
+    }
+  }
+  FluNet_data$bcp_end[FluNet_data$Country==country_list[i]] <- FluNet_temp$bcp_end
+}
+
+# for (i in seq_along(country_list)) { 
+# FluNet_temp <- filter(FluNet_data, FluNet_data$Country==country_list[i] & is.na(FluNet_data$bcp.postprob) == FALSE)
+# plot <- ggplot(FluNet_temp, aes(x = SDATE, y = ALL_INF)) + 
+#         geom_line(aes(col = bcp.postprob), size = 0.75) +
+#         scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") +
+#           labs(x = "", y = "influenza case counts",
+#           title = paste("WHO FluNet data for", country_list[i], "with posterior probability of change point", sep = " ")) +
+#         geom_vline(xintercept = na.omit(FluNet_temp$bcp_end), lty = 2, col = "red")
+# 
+# print(plot)
+# }
+
+
+FluNet_data$startend <- ifelse(is.na(FluNet_data$bcp_start) == FALSE, "start", 
+                              ifelse(is.na(FluNet_data$bcp_end) == FALSE, "end", NA))
+# if the series starts with "end", remove these entries 
+if(min(which(FluNet_data$startend == "end")) < min(which(FluNet_data$startend == "start"))){
+  FluNet_data$startend[min(which(FluNet_data$startend == "end"))] <- NA
+}
+
+# if 'start' is not followed by an 'end' within six months, add an 'end' directly after - this period should be optimized
+for(i in 1:(nrow(FluNet_data)-20)){
+  if(is.na(FluNet_data$startend[i]) == FALSE){
+    if(FluNet_data$startend[i] == "start" & sum(FluNet_data$startend[(i+1):(i+26)] == "end", na.rm = TRUE) == 0){
+      FluNet_data$startend[i+1] <- "end"
+    }
+  }
+}
+
+# repeat date copying into bcp_start and bcp_end columns to correct for inserted 'ends' (and manually curated values)
+FluNet_data$bcp_end <- ifelse(FluNet_data$startend == "end", FluNet_data$SDATE, NA)
+FluNet_data$bcp_start <- ifelse(FluNet_data$startend == "start", FluNet_data$SDATE, NA)
+
+
+for (i in seq_along(country_list)) {
+  FluNet_temp <- filter(FluNet_data, FluNet_data$Country==country_list[i] & is.na(FluNet_data$bcp.postprob) == FALSE)
+  plot <- ggplot(FluNet_temp, aes(x = SDATE, y = ALL_INF)) +
+            geom_line(aes(col = bcp.postprob), size = 0.75) +
+            scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") +
+              labs(x = "", y = "influenza case counts",
+              title = paste("WHO FluNet data for", country_list[i], "with first and last epidemic points", sep = " ")) +
+            geom_vline(xintercept = na.omit(FluNet_temp$bcp_start[FluNet_temp$startend == "start"]), lty = 2, col = "red") +
+            geom_vline(xintercept = na.omit(FluNet_temp$bcp_end[FluNet_temp$startend == "end"]), lty = 2, col = "darkgreen")
+
+  print(plot)
+}
+
+## look at plots and manually delete some starts or ends that don't fit
+which(FluNet_data$Country == "Brazil" & FluNet_data$startend == "end")
+FluNet_data[975, 27] <- NA    # row 975 is 'end' I want to remove and column 27 is 'startend' column
+
+# which(FluNet_data$Country == "Bulgaria" & FluNet_data$startend == "start")
+# FluNet_data[1181, 27] <- NA
+# 
+# which(FluNet_data$Country == "Costa Rica" & FluNet_data$startend == "end")
+# FluNet_data[1846, 27] <- NA
+# 
+# which(FluNet_data$Country == "Egypt" & FluNet_data$startend == "end")
+# FluNet_data[2617, 27] <- NA
+# FluNet_data[2702, 27] <- NA
+# 
+# which(FluNet_data$Country == "India" & FluNet_data$startend == "end")
+# FluNet_data[4386, 27] <- "start"
+# FluNet_data[4387, 27] <- "end"
+
+FluNet_temp <- filter(FluNet_data, FluNet_data$Country=="India" & is.na(FluNet_data$bcp.postprob) == FALSE)
+ggplot(FluNet_temp, aes(x = SDATE, y = ALL_INF)) +
+  geom_line(aes(col = bcp.postprob), size = 0.75) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") +
+  labs(x = "", y = "influenza case counts",
+       title = paste("WHO FluNet data for", country_list[i], "with first and last epidemic points", sep = " ")) +
+  geom_vline(xintercept = na.omit(FluNet_temp$bcp_start[FluNet_temp$startend == "start"]), lty = 2, col = "red") +
+  geom_vline(xintercept = na.omit(FluNet_temp$bcp_end[FluNet_temp$startend == "end"]), lty = 2, col = "darkgreen")
+
+
+## set binary 'epidemic' indicator
+FluNet_data$epidemic <- NA
+FluNet_data <- FluNet_data %>% 
+  group_by(Country, grp = cumsum(!is.na(startend))) %>% 
+  mutate(epidemic = replace(startend, first(startend) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp) 
+FluNet_data$epidemic[which(FluNet_data$epidemic == "end")] <- FALSE
+FluNet_data$epidemic[which(is.na(FluNet_data$epidemic) == TRUE)] <- FALSE
