@@ -206,30 +206,21 @@ for(i in 1:nrow(indicators)){
   }
 }
 
-indicators$english <- NA
-for(i in 1:nrow(indicators)){
-  if(indicators$country[i] %in% c("Australia", "United Kingdom", "United States", "Nigeria")){
-    indicators$english[i] <- TRUE
-  }else{
-    indicators$english[i] <- FALSE
-  }
-}
+
+indicators$english <- ifelse(indicators$country %in% c("Australia", "United Kingdom", "United States"), TRUE, FALSE)
 
 languages <- c("Spanish", "English", "Portuguese", "Bulgarian", "Chinese", "Spanish", "Spanish", "Arabic", "French",
                "German", "Greek", "Hindi", "Farsi", "Spanish", "English", "Russian", "Arabic", "Afrikaans", "Swedish",
                "Thai", "English", "English", "Spanish", "Vietnamese")
-indicators$language <- languages
+indicators$official_language <- languages
 
 
-indicators$problematic_FluNet <- ifelse(indicators$FluNet_total_cat == "low" | indicators$global_region == "tropical", 
-                                        TRUE, FALSE)
-indicators$problematic_FluNet[indicators$country == "France"] <- TRUE
-np <- c("Germany", "Ecuador", "Bulgaria", "Greece", "Iran", "South Africa")
-indicators$problematic_FluNet[indicators$country %in% np] <- FALSE
-indicators$country[indicators$problematic_FluNet == TRUE]
+indicators$problematic_FluNet <- ifelse(indicators$country %in% c("Nigeria", "Thailand", "Vietnam"), TRUE, FALSE)
 
 indicators$problematic_EIOS <- ifelse(indicators$EIOS_total_cat == "low", TRUE, FALSE)
-indicators$country[indicators$problematic_EIOS == TRUE]
+indicators$country[indicators$problematic_EIOS]
 
 indicators$problematic_HM <- ifelse(indicators$HM_total_cat == "low", TRUE, FALSE)
-indicators$country[indicators$problematic_HM == TRUE]
+indicators$country[indicators$problematic_HM]
+
+# write.csv(indicators, file = "country_indicators.csv")
