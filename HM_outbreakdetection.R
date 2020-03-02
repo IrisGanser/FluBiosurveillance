@@ -52,6 +52,10 @@ HM_byweek <- HM_byweek[order(HM_byweek$country), ]
 # load indicators df
 indicators <- read.csv("country_indicators.csv")
 
+
+HM_counts <- HM_byweek %>% group_by(country) %>% summarise(mean_count = mean(counts), median_counts = median(counts), 
+                                                           max_count = max(counts), total_count = sum(counts))
+
 # establish country groups
 high_count_countries <- as.character(indicators$country[indicators$HM_total_cat == "high"])
 medium_count_countries <- as.character(indicators$country[indicators$HM_total_cat == "medium"])
@@ -60,6 +64,9 @@ country_list <- levels(HM_byweek$country)
 
 
 ### outbreak detection with bcp in high count countries ###
+# remove China from high count countries because there is just too much noise in data (no clear seasonality)
+high_count_countries <- high_count_countries[high_count_countries != "China"]
+
 # smooth counts
 HM_byweek$count_smooth <- NA
 for (i in seq_along(country_list)) { 
@@ -138,17 +145,23 @@ for (i in seq_along(high_count_countries)) {
 HM_byweek$startend_bcp <- ifelse(is.na(HM_byweek$bcp_start) == FALSE, "start", 
                                ifelse(is.na(HM_byweek$bcp_end) == FALSE, "end", NA))
 # for spikes: if 'start' is not followed by an 'end' within 30 weeks, add an 'end' directly after - this period should be optimized
-for(i in 1:nrow(HM_byweek)){
-  if(is.na(HM_byweek$startend_bcp[i]) == FALSE){
-    if(HM_byweek$startend_bcp[i] == "start" & sum(HM_byweek$startend_bcp[(i+1):(i+40)] == "end", na.rm = TRUE) == 0){
-      HM_byweek$startend_bcp[i+1] <- "end"
-    }
-  }
-}
+# for(i in 1:nrow(HM_byweek)){
+#   if(is.na(HM_byweek$startend_bcp[i]) == FALSE){
+#     if(HM_byweek$startend_bcp[i] == "start" & sum(HM_byweek$startend_bcp[(i+1):(i+40)] == "end", na.rm = TRUE) == 0){
+#       HM_byweek$startend_bcp[i+1] <- "end"
+#     }
+#   }
+# }
 
 # manually insert one 'end' after a spike for Russia
 which(HM_byweek$country == "Russia" & HM_byweek$startend_bcp == "start")
 HM_byweek[5359, 8] <- "end"
+# manually insert one 'end' after a spike for Mexico
+which(HM_byweek$country == "Mexico" & HM_byweek$startend_bcp == "start")
+HM_byweek[4690, 8] <- "end"
+# manually remove one 'end' in an epidemic for Brazil
+which(HM_byweek$country == "Brazil" & HM_byweek$startend_bcp == "end")
+HM_byweek[859, 8] <- NA
 
 # repeat date copying into bcp_start and bcp_end columns to correct for inserted 'ends' (and manually curated values)
 HM_byweek$bcp_end <- ifelse(HM_byweek$startend_bcp == "end", HM_byweek$date, NA)
@@ -170,23 +183,27 @@ for (i in seq_along(high_count_countries)) {
   #ggsave(plot = plot, file = paste("FluNet smoothing", country_list[i], ".jpeg", sep=' '))
 }
 
-HM_counts <- HM_byweek %>% group_by(country) %>% summarise(mean_count = mean(counts), median_counts = median(counts), 
-                                                           max_count = max(counts), total_count = sum(counts))
 
 
 
-### apply cpm algorithms to medium count countries ###
+### apply cpm algorithms to medium count countries (countries with enough counts for cpm)###
 medium_count_countries <- c(medium_count_countries, "China")
 
-# plot HM data for medium count countries
-for (i in seq_along(medium_count_countries)) {
-  HM_temp <- filter(HM_byweek, country == medium_count_countries[i])
+non_cpm_countries <- filter(HM_counts, max_count <= 5 | total_count < 60) %>% filter(total_count < 100) %>%
+  select(country) %>% unlist(use.names = FALSE) %>% as.character()
+# for these countries, cpm is not likely to work because not enough counts
+cpm_countries <- c(medium_count_countries, low_count_countries[!low_count_countries %in% non_cpm_countries])
+cpm_countries <- sort(cpm_countries) #sort alphabetically
+
+# plot HM data for cpm countries
+for (i in seq_along(cpm_countries)) {
+  HM_temp <- filter(HM_byweek, country == cpm_countries[i])
   
   plot <- ggplot(HM_temp, aes(x = date, y = counts)) + 
     geom_line(size = 0.75) +
     scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
     labs(x = "", y = "HealthMap event counts", 
-         title = paste("HealthMap data for", medium_count_countries[i], "with smoothed time trend (span = 0.09)", sep = " ")) + 
+         title = paste("HealthMap data for", cpm_countries[i], "with smoothed time trend (span = 0.09)", sep = " ")) + 
     geom_line(aes(y = count_smooth), col = "red", size = 0.75)
   
   print(plot)
@@ -196,18 +213,18 @@ for (i in seq_along(medium_count_countries)) {
 
 # apply cpm algorithm with Mann-Whitney method
 HM_byweek$cpm <- NA
-for (i in seq_along(medium_count_countries)) {
-  HM_temp <- filter(HM_byweek, country == medium_count_countries[i])
+for (i in seq_along(cpm_countries)) {
+  HM_temp <- filter(HM_byweek, country == cpm_countries[i])
   
   cpm_temp <- processStream(HM_temp$counts, cpmType = "Mann-Whitney", startup = 10, ARL0 = 500)
   HM_temp$cpm[cpm_temp$changePoints] <- HM_temp$date[cpm_temp$changePoints]
-  HM_byweek$cpm[HM_byweek$country == medium_count_countries[i]] <- HM_temp$cpm
+  HM_byweek$cpm[HM_byweek$country == cpm_countries[i]] <- HM_temp$cpm
 }
 
 # apply criteria for start of epidemics
 HM_byweek$cpm_start <- NA
-for (i in seq_along(medium_count_countries)) {
-  HM_temp <- filter(HM_byweek, country == medium_count_countries[i])
+for (i in seq_along(cpm_countries)) {
+  HM_temp <- filter(HM_byweek, country == cpm_countries[i])
   
   for(j in 2:13){ # first few rows without looking back for previous outbreak
     if(is.na(HM_temp$cpm[j]) == FALSE &
@@ -226,15 +243,15 @@ for (i in seq_along(medium_count_countries)) {
       HM_temp$cpm_start[j] <- NA
     }
   }
-  HM_byweek$cpm_start[HM_byweek$country==medium_count_countries[i]] <- HM_temp$cpm_start
+  HM_byweek$cpm_start[HM_byweek$country==cpm_countries[i]] <- HM_temp$cpm_start
 }
 
 
 
 #  apply criteria for end of epidemics
 HM_byweek$cpm_end <- NA
-for (i in seq_along(medium_count_countries)) { 
-  HM_temp <- filter(HM_byweek, country == medium_count_countries[i])
+for (i in seq_along(cpm_countries)) { 
+  HM_temp <- filter(HM_byweek, country == cpm_countries[i])
   
   for(j in nrow(HM_temp):1){# run in reverse because otherwise, third criterion cannot be recognized
     if(is.na(HM_temp$cpm[j]) == FALSE &
@@ -245,7 +262,7 @@ for (i in seq_along(medium_count_countries)) {
       HM_temp$cpm_end[j] <- NA
     }
   }
-  HM_byweek$cpm_end[HM_byweek$country==medium_count_countries[i]] <- HM_temp$cpm_end
+  HM_byweek$cpm_end[HM_byweek$country==cpm_countries[i]] <- HM_temp$cpm_end
 }
 
 
@@ -255,14 +272,14 @@ HM_byweek$startend_cpm <- ifelse(is.na(HM_byweek$cpm_start) == FALSE, "start",
 
 
 # look at plots
-for (i in seq_along(medium_count_countries)) {
-  HM_temp <- filter(HM_byweek, country == medium_count_countries[i])
+for (i in seq_along(cpm_countries)) {
+  HM_temp <- filter(HM_byweek, country == cpm_countries[i])
   
   plot <- ggplot(HM_temp, aes(x = date, y = counts)) + 
     geom_line(size = 0.75) +
     scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
     labs(x = "", y = "HealthMap event counts", 
-         title = paste("HealthMap data for", medium_count_countries[i], "with start and end of epidemics", sep = " ")) + 
+         title = paste("HealthMap data for", cpm_countries[i], "with start and end of epidemics", sep = " ")) + 
     geom_vline(xintercept = na.omit(HM_temp$cpm_start[HM_temp$startend_cpm == "start"]), lty = 2, col = "red") +
     geom_vline(xintercept = na.omit(HM_temp$cpm_end[HM_temp$startend_cpm == "end"]), lty = 2, col = "darkgreen")
   
@@ -272,111 +289,8 @@ for (i in seq_along(medium_count_countries)) {
 
 
 
-### apply cpm algorithms to low count countries ###
-
-# plot HM data for low  count countries
-for (i in seq_along(low_count_countries)) {
-  HM_temp <- filter(HM_byweek, country == low_count_countries[i])
-  
-  plot <- ggplot(HM_temp, aes(x = date, y = counts)) + 
-    geom_line(size = 0.75) +
-    scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
-    labs(x = "", y = "HealthMap event counts", 
-         title = paste("HealthMap data for", low_count_countries[i], "with smoothed time trend (span = 0.09)", sep = " ")) + 
-    geom_line(aes(y = count_smooth), col = "red", size = 0.75)
-  
-  print(plot)
-  #ggsave(plot = plot, file = paste("FluNet smoothing", country_list[i], ".jpeg", sep=' '))
-}
-
-
-# apply cpm algorithm with Mann-Whitney method
-HM_byweek$cpm <- NA
-for (i in seq_along(low_count_countries)) {
-  HM_temp <- filter(HM_byweek, country == low_count_countries[i])
-  
-  cpm_temp <- processStream(HM_temp$counts, cpmType = "Mann-Whitney", startup = 10, ARL0 = 500)
-  HM_temp$cpm[cpm_temp$changePoints] <- HM_temp$date[cpm_temp$changePoints]
-  HM_byweek$cpm[HM_byweek$country == low_count_countries[i]] <- HM_temp$cpm
-}
-
-# apply criteria for start of epidemics
-HM_byweek$cpm_start <- NA
-for (i in seq_along(low_count_countries)) {
-  HM_temp <- filter(HM_byweek, country == low_count_countries[i])
-  
-  for(j in 2:13){ # first few rows without looking back for previous outbreak
-    if(is.na(HM_temp$cpm[j]) == FALSE &
-       HM_temp$count_smooth[j] > HM_temp$count_smooth[j-1]){
-      HM_temp$cpm_start[j] <- HM_temp$date[j]
-    } else {
-      HM_temp$cpm_start[j] <- NA
-    }
-  }
-  for(j in 10:nrow(HM_temp)){
-    if(is.na(HM_temp$cpm[j]) == FALSE & # change point
-       HM_temp$count_smooth[j] > HM_temp$count_smooth[j-1] & # smoothed mean to ensure that curve is rising 
-       sum(!is.na(HM_temp$cpm_start[(j-10):(j-1)])) == 0){ # No outbreak flagged during the previous 10 weeks
-      HM_temp$cpm_start[j] <- HM_temp$date[j]
-    } else {
-      HM_temp$cpm_start[j] <- NA
-    }
-  }
-  HM_byweek$cpm_start[HM_byweek$country==low_count_countries[i]] <- HM_temp$cpm_start
-}
+### what to do with very low count countries? ###
+non_cpm_countries
 
 
 
-#  apply criteria for end of epidemics
-HM_byweek$cpm_end <- NA
-for (i in seq_along(low_count_countries)) { 
-  HM_temp <- filter(HM_byweek, country == low_count_countries[i])
-  
-  for(j in nrow(HM_temp):1){# run in reverse because otherwise, third criterion cannot be recognized
-    if(is.na(HM_temp$cpm[j]) == FALSE &
-       HM_temp$count_smooth[j] > HM_temp$count_smooth[j+1] & 
-       sum(!is.na(HM_temp$cpm_end[(j+1):(j+15)])) == 0){ 
-      HM_temp$cpm_end[j] <- HM_temp$date[j]
-    } else {
-      HM_temp$cpm_end[j] <- NA
-    }
-  }
-  HM_byweek$cpm_end[HM_byweek$country==low_count_countries[i]] <- HM_temp$cpm_end
-}
-
-
-# start and end indicators of epidemics
-HM_byweek$startend_cpm <- ifelse(is.na(HM_byweek$cpm_start) == FALSE, "start", 
-                                 ifelse(is.na(HM_byweek$cpm_end) == FALSE, "end", NA))
-
-
-# look at plots
-for (i in seq_along(low_count_countries)) {
-  HM_temp <- filter(HM_byweek, country == low_count_countries[i])
-  
-  plot <- ggplot(HM_temp, aes(x = date, y = counts)) + 
-    geom_line(size = 0.75) +
-    scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
-    labs(x = "", y = "HealthMap event counts", 
-         title = paste("HealthMap data for", low_count_countries[i], "with start and end of epidemics", sep = " ")) + 
-    geom_vline(xintercept = na.omit(HM_temp$cpm_start[HM_temp$startend_cpm == "start"]), lty = 2, col = "red") +
-    geom_vline(xintercept = na.omit(HM_temp$cpm_end[HM_temp$startend_cpm == "end"]), lty = 2, col = "darkgreen")
-  
-  print(plot)
-  #ggsave(plot = plot, file = paste("FluNet smoothing", country_list[i], ".jpeg", sep=' '))
-}
-
-
-cpm_countries <- c(medium_count_countries, "Costa Rica", "Ecuador", "Greece", "Thailand")
-
-
-HM_temp <- filter(HM_byweek, country == "Iran")
-HM_temp$cpm <- NA
-cpm_temp <- processStream(HM_temp$counts, cpmType = "Kolmogorov-Smirnov", startup = 10, ARL0 = 500)
-HM_temp$cpm[cpm_temp$changePoints] <- HM_temp$date[cpm_temp$changePoints]
-ggplot(HM_temp, aes(x = date, y = counts)) + 
-  geom_line(size = 0.75) +
-  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
-  labs(x = "", y = "HealthMap event counts", 
-       title = paste("HealthMap data for", low_count_countries[i], "with start and end of epidemics", sep = " ")) + 
-  geom_vline(xintercept = na.omit(HM_temp$cpm), lty = 2, col = "red") 
