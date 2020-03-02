@@ -129,8 +129,8 @@ HM_byweek$bcp_end <- NA
 for (i in seq_along(high_count_countries)) { 
   HM_temp <- filter(HM_byweek, country == high_count_countries[i] & is.na(HM_byweek$bcp.postprob) == FALSE)
   
-  for(j in nrow(HM_temp):1){# run in reverse because otherwise, third criterion cannot be recognized
-    if(HM_temp$bcp.postprob[j] >= 0.5 & HM_temp$bcp.postprob[(j+1)] < 0.5 & # transition from non-epidemic to epidemic
+  for(j in (nrow(HM_temp)-2):2){# run in reverse because otherwise, third criterion cannot be recognized
+    if(HM_temp$bcp.postprob[j-1] >= 0.5 & HM_temp$bcp.postprob[j] < 0.5 & # transition from non-epidemic to epidemic
        HM_temp$count_smooth[j] > HM_temp$count_smooth[j+1] & # running mean to ensure that curve is rising (beware of spikes!)
        sum(!is.na(HM_temp$bcp_end[(j+1):(j+15)])) == 0){ # No outbreak flagged during the previous 15 weeks
        HM_temp$bcp_end[j] <- HM_temp$date[j]
@@ -144,24 +144,30 @@ for (i in seq_along(high_count_countries)) {
 # start and end indicators of epidemics
 HM_byweek$startend_bcp <- ifelse(is.na(HM_byweek$bcp_start) == FALSE, "start", 
                                ifelse(is.na(HM_byweek$bcp_end) == FALSE, "end", NA))
+
 # for spikes: if 'start' is not followed by an 'end' within 30 weeks, add an 'end' directly after - this period should be optimized
 # for(i in 1:nrow(HM_byweek)){
-#   if(is.na(HM_byweek$startend_bcp[i]) == FALSE){
-#     if(HM_byweek$startend_bcp[i] == "start" & sum(HM_byweek$startend_bcp[(i+1):(i+40)] == "end", na.rm = TRUE) == 0){
-#       HM_byweek$startend_bcp[i+1] <- "end"
+#   if(HM_byweek$date[i] < "2019-09-01"){
+#     if(is.na(HM_byweek$startend_bcp[i]) == FALSE){
+#       if(HM_byweek$startend_bcp[i] == "start" & sum(HM_byweek$startend_bcp[(i+1):(i+40)] == "end", na.rm = TRUE) == 0){
+#         HM_byweek$startend_bcp[i+1] <- "end"
+#       }
 #     }
 #   }
 # }
 
 # manually insert one 'end' after a spike for Russia
 which(HM_byweek$country == "Russia" & HM_byweek$startend_bcp == "start")
-HM_byweek[5359, 8] <- "end"
+HM_byweek$startend_bcp[5359] <- "end"
 # manually insert one 'end' after a spike for Mexico
 which(HM_byweek$country == "Mexico" & HM_byweek$startend_bcp == "start")
-HM_byweek[4690, 8] <- "end"
+HM_byweek$startend_bcp[4690] <- "end"
 # manually remove one 'end' in an epidemic for Brazil
 which(HM_byweek$country == "Brazil" & HM_byweek$startend_bcp == "end")
-HM_byweek[859, 8] <- NA
+HM_byweek$startend_bcp[860] <- NA
+# manually remove one 'end' in an epidemic for USA
+which(HM_byweek$country == "United States" & HM_byweek$startend_bcp == "end")
+HM_byweek$startend_bcp[7254] <- NA
 
 # repeat date copying into bcp_start and bcp_end columns to correct for inserted 'ends' (and manually curated values)
 HM_byweek$bcp_end <- ifelse(HM_byweek$startend_bcp == "end", HM_byweek$date, NA)
@@ -293,4 +299,47 @@ for (i in seq_along(cpm_countries)) {
 non_cpm_countries
 
 
+### set binary 'epidemic' indicator
+# overall startend indicator
+HM_byweek$startend <- NA
+for(i in 1:nrow(HM_byweek)){
+  if(HM_byweek$country[i] %in% high_count_countries){
+    HM_byweek$startend[i] <- HM_byweek$startend_bcp[i]
+  } else if(HM_byweek$country[i] %in% cpm_countries){
+    HM_byweek$startend[i] <- HM_byweek$startend_cpm[i]
+  } else
+    HM_byweek$startend[i] <- NA
+}
 
+
+HM_byweek$epidemic <- NA
+HM_byweek <- HM_byweek %>% 
+  group_by(country, grp = cumsum(!is.na(startend))) %>% 
+  mutate(epidemic = replace(startend, first(startend) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp) 
+HM_byweek$epidemic[which(HM_byweek$epidemic == "end")] <- FALSE
+HM_byweek$epidemic[which(is.na(HM_byweek$epidemic) == TRUE)] <- FALSE
+
+
+
+for (i in seq_along(country_list)) {
+  HM_temp <- filter(HM_byweek, country == country_list[i])
+  
+  plot <- ggplot(HM_temp, aes(x = date, y = counts, col = epidemic)) + 
+    geom_line(aes(group = 1), size = 0.75) +
+    scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+    labs(x = "", y = "HealthMap event counts", 
+         title = paste("HealthMap data for", country_list[i], "with start and end of epidemics", sep = " ")) + 
+    geom_vline(xintercept = na.omit(HM_temp$cpm_start[HM_temp$startend_cpm == "start"]), lty = 2, col = "red") +
+    geom_vline(xintercept = na.omit(HM_temp$cpm_end[HM_temp$startend_cpm == "end"]), lty = 2, col = "darkgreen") + 
+    geom_vline(xintercept = na.omit(HM_temp$bcp_start[HM_temp$startend_bcp == "start"]), lty = 2, col = "red") +
+    geom_vline(xintercept = na.omit(HM_temp$bcp_end[HM_temp$startend_bcp == "end"]), lty = 2, col = "darkgreen") +
+    scale_color_manual(values = c("#6e6868", "#e64040"))
+
+  print(plot)
+  #ggsave(plot = plot, file = paste("FluNet outbreak", country_list[i], ".jpeg", sep=' '))
+}
+
+# write data in file
+# write.csv(HM_byweek, file = "HealthMap_epidemic.csv")
