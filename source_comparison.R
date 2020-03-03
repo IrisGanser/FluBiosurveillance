@@ -111,3 +111,42 @@ ggplot(source_sensitivity, aes(x = country, y = sensitivity, fill = source)) +
   
 
 ##### calculate false alarm rate #####
+# calculate false alert rate during non-outbreak intervals
+
+false_alarm_rate <- vector(mode = "list")
+for(i in seq_along(country_list)){
+  FluNet_EIOS_temp <- filter(FluNet_epidemic, Country == country_list[i] & 
+                               SDATE %within% interval(min(EIOS_epidemic$date), max(EIOS_epidemic$date)))
+  FluNet_HM_temp <- filter(FluNet_epidemic, Country == country_list[i] & 
+                             SDATE %within% interval(min(HM_epidemic$date), max(HM_epidemic$date)))
+  HM_temp <- filter(HM_epidemic, country == country_list[i])
+  EIOS_temp <- filter(EIOS_epidemic, country == country_list[i])
+  
+  state_HM <- FluNet_HM_temp$epidemic
+  alarm_HM <- HM_temp$epidemic
+  FA_HM <- sum(alarm_HM[state_HM == FALSE])
+  FAR_HM <- FA_HM / length(alarm_HM[state_HM == FALSE])
+  
+  state_EIOS <- FluNet_EIOS_temp$epidemic
+  alarm_EIOS <- EIOS_temp$epidemic
+  FA_EIOS <- sum(alarm_EIOS[state_EIOS == FALSE])
+  FAR_EIOS <- FA_HM / length(alarm_EIOS[state_EIOS == FALSE])
+  
+  false_alarm_rate$country[i] <- country_list[i]
+  false_alarm_rate$FAR_HM[i] <- FAR_HM
+  false_alarm_rate$FAR_EIOS[i] <- FAR_EIOS
+}
+
+FAR <- data.frame(false_alarm_rate$country, false_alarm_rate$FAR_HM, false_alarm_rate$FAR_EIOS)
+names(FAR) <- c("country", "FAR_HM", "FAR_EIOS")
+
+FAR_long <- pivot_longer(FAR, cols = c(FAR_HM, FAR_EIOS), names_to = "source", values_to = "false_alarm_rate")
+FAR_long$source <- factor(FAR_long$source, levels = c("FAR_HM", "FAR_EIOS"), labels = c("HealthMap", "EIOS"))
+
+ggplot(FAR_long, aes(x = country, y = false_alarm_rate, fill = source)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "False alarm rate of HealthMap and EIOS systems", y = "False alarm rate", x = "", 
+       caption = "WHO FluNet data were used as gold standard") +
+  scale_x_discrete(limits = rev(levels(FAR_long$country))) +
+  scale_fill_brewer(palette = "Set1")
