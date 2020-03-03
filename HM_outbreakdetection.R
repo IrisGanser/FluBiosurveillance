@@ -50,7 +50,7 @@ HM_byweek <- dataHM %>% group_by(date = floor_date(load_date, "week"), country =
 HM_byweek <- HM_byweek[order(HM_byweek$country), ]
 
 # load indicators df
-indicators <- read.csv("country_indicators.csv")
+indicators <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/country_indicators.csv")
 
 
 HM_counts <- HM_byweek %>% group_by(country) %>% summarise(mean_count = mean(counts), median_counts = median(counts), 
@@ -295,11 +295,34 @@ for (i in seq_along(cpm_countries)) {
 
 
 
-### what to do with very low count countries? ###
+### run EWMA on left countries ###
 non_cpm_countries
+
+HM_byweek$ewma <- NA
+for (i in seq_along(non_cpm_countries)) {
+  HM_temp <- filter(HM_byweek, country == non_cpm_countries[i])
+  
+  ewma_temp <- ewma(HM_temp$counts, lambda = 0.3, nsigmas = 3,
+                    title = paste(non_cpm_countries[i], "EWMA", sep = " "))
+  
+  violations <- ewma_temp$violations
+  HM_temp$ewma[violations] <- TRUE
+  HM_byweek$ewma[HM_byweek$country == non_cpm_countries[i]] <- HM_temp$ewma
+}
+
+for(i in 1:nrow(HM_byweek)){
+  if(HM_byweek$country[i] %in% non_cpm_countries){
+    if(is.na(HM_byweek$ewma[i]) == TRUE){
+      HM_byweek$ewma[i] <- FALSE
+    } 
+  }
+}
 
 
 ### set binary 'epidemic' indicator
+
+HM_byweek$epidemic <- ifelse(HM_byweek$country %in% non_cpm_countries, HM_byweek$ewma, NA)
+
 # overall startend indicator
 HM_byweek$startend <- NA
 for(i in 1:nrow(HM_byweek)){
@@ -307,24 +330,26 @@ for(i in 1:nrow(HM_byweek)){
     HM_byweek$startend[i] <- HM_byweek$startend_bcp[i]
   } else if(HM_byweek$country[i] %in% cpm_countries){
     HM_byweek$startend[i] <- HM_byweek$startend_cpm[i]
-  } else
+  } else{
     HM_byweek$startend[i] <- NA
+  }
 }
 
 
-HM_byweek$epidemic <- NA
-HM_byweek <- HM_byweek %>% 
+HM_epidemic <- HM_byweek %>% filter(country %in% high_count_countries | country %in% cpm_countries) %>% 
   group_by(country, grp = cumsum(!is.na(startend))) %>% 
   mutate(epidemic = replace(startend, first(startend) == 'start', TRUE)) %>% 
   ungroup() %>% 
   select(-grp) 
-HM_byweek$epidemic[which(HM_byweek$epidemic == "end")] <- FALSE
-HM_byweek$epidemic[which(is.na(HM_byweek$epidemic) == TRUE)] <- FALSE
+HM_epidemic$epidemic[which(HM_epidemic$epidemic == "end")] <- FALSE
+HM_epidemic$epidemic[which(is.na(HM_epidemic$epidemic) == TRUE)] <- FALSE
 
+HM_epidemic <- rbind(filter(HM_byweek, country %in% non_cpm_countries), HM_epidemic) 
+HM_epidemic <- HM_epidemic[order(HM_epidemic$country), ]
 
 
 for (i in seq_along(country_list)) {
-  HM_temp <- filter(HM_byweek, country == country_list[i])
+  HM_temp <- filter(HM_epidemic, country == country_list[i])
   
   plot <- ggplot(HM_temp, aes(x = date, y = counts, col = epidemic)) + 
     geom_line(aes(group = 1), size = 0.75) +
@@ -338,8 +363,8 @@ for (i in seq_along(country_list)) {
     scale_color_manual(values = c("#6e6868", "#e64040"))
 
   print(plot)
-  #ggsave(plot = plot, file = paste("FluNet outbreak", country_list[i], ".jpeg", sep=' '))
+  #ggsave(plot = plot, file = paste("HealthMap outbreak", country_list[i], ".jpeg", sep=' '))
 }
 
 # write data in file
-# write.csv(HM_byweek, file = "HealthMap_epidemic.csv")
+# write.csv(HM_epidemic, file = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/HealthMap_epidemic.csv")
