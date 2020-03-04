@@ -80,6 +80,13 @@ for(i in seq_along(country_list)){
   outbreaks_detected$no_EIOS[i] <- no_detected_outbreaks_EIOS
 }
 
+FluNet_EIOS_temp <- filter(FluNet_outbreak_length, Country == "Argentina" & 
+                             start_date %within% interval(min(EIOS_epidemic$date), max(EIOS_epidemic$date)))
+EIOS_temp <- filter(EIOS_outbreak_length, country == "Argentina")
+
+
+
+
 FluNet_outbreaks_for_HM <- filter(FluNet_outbreak_length, start_date %within% interval(min(HM_epidemic$date), max(HM_epidemic$date))) %>% 
   group_by(Country) %>% summarize(no_FluNet_for_HM = n())
 
@@ -108,7 +115,48 @@ ggplot(source_sensitivity, aes(x = country, y = sensitivity, fill = source)) +
        caption = "WHO FluNet data were used as gold standard") +
   scale_x_discrete(limits = rev(levels(source_sensitivity$country))) +
   scale_fill_brewer(palette = "Set1")
+
+##### calculate sensitivity per week #####
+sens_per_week_list <- vector(mode = "list")
+for(i in seq_along(country_list)){
+  FluNet_EIOS_temp <- filter(FluNet_epidemic, Country == country_list[i] & 
+                               SDATE %within% interval(min(EIOS_epidemic$date), max(EIOS_epidemic$date)))
+  FluNet_HM_temp <- filter(FluNet_epidemic, Country == country_list[i] & 
+                             SDATE %within% interval(min(HM_epidemic$date), max(HM_epidemic$date)))
+  HM_temp <- filter(HM_epidemic, country == country_list[i])
+  EIOS_temp <- filter(EIOS_epidemic, country == country_list[i])
   
+  state_HM <- FluNet_HM_temp$epidemic
+  alarm_HM <- HM_temp$epidemic
+  sens_HM <- sum(alarm_HM[state_HM == TRUE], na.rm = TRUE)
+  sens_HM <- FA_HM / length(alarm_HM[state_HM == TRUE])
+  
+  state_EIOS <- FluNet_EIOS_temp$epidemic
+  alarm_EIOS <- EIOS_temp$epidemic
+  sens_EIOS <- sum(alarm_EIOS[state_EIOS == TRUE], na.rm = TRUE)
+  sens_EIOS <- FA_EIOS / length(alarm_EIOS[state_EIOS == TRUE])
+  
+  sens_per_week_list$country[i] <- country_list[i]
+  sens_per_week_list$sens_HM[i] <- sens_HM
+  sens_per_week_list$sens_EIOS[i] <- sens_EIOS
+}
+
+sens_per_week <- data.frame(sens_per_week_list$country, sens_per_week_list$sens_HM, sens_per_week_list$sens_EIOS)
+names(sens_per_week) <- c("country", "sens_HM", "sens_EIOS")
+
+sens_per_week_long <- pivot_longer(sens_per_week, cols = c(sens_HM, sens_EIOS), names_to = "source", 
+                                   values_to = "sensitivity_per_week")
+sens_per_week_long$source <- factor(sens_per_week_long$source, levels = c("sens_HM", "sens_EIOS"), labels = c("HealthMap", "EIOS"))
+
+ggplot(sens_per_week_long, aes(x = country, y = sensitivity_per_week, fill = source)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "Sensitivity per week of HealthMap and EIOS systems", y = "Sensitivity per week", x = "", 
+       caption = "WHO FluNet data were used as gold standard") +
+  scale_x_discrete(limits = rev(levels(sens_per_week_long$country))) +
+  scale_fill_brewer(palette = "Set1")
+
+
 
 ##### calculate false alarm rate #####
 # calculate false alert rate during non-outbreak intervals
@@ -124,13 +172,13 @@ for(i in seq_along(country_list)){
   
   state_HM <- FluNet_HM_temp$epidemic
   alarm_HM <- HM_temp$epidemic
-  FA_HM <- sum(alarm_HM[state_HM == FALSE])
+  FA_HM <- sum(alarm_HM[state_HM == FALSE], na.rm = TRUE)
   FAR_HM <- FA_HM / length(alarm_HM[state_HM == FALSE])
   
   state_EIOS <- FluNet_EIOS_temp$epidemic
   alarm_EIOS <- EIOS_temp$epidemic
-  FA_EIOS <- sum(alarm_EIOS[state_EIOS == FALSE])
-  FAR_EIOS <- FA_HM / length(alarm_EIOS[state_EIOS == FALSE])
+  FA_EIOS <- sum(alarm_EIOS[state_EIOS == FALSE], na.rm = TRUE)
+  FAR_EIOS <- FA_EIOS / length(alarm_EIOS[state_EIOS == FALSE])
   
   false_alarm_rate$country[i] <- country_list[i]
   false_alarm_rate$FAR_HM[i] <- FAR_HM
@@ -142,6 +190,7 @@ names(FAR) <- c("country", "FAR_HM", "FAR_EIOS")
 
 FAR_long <- pivot_longer(FAR, cols = c(FAR_HM, FAR_EIOS), names_to = "source", values_to = "false_alarm_rate")
 FAR_long$source <- factor(FAR_long$source, levels = c("FAR_HM", "FAR_EIOS"), labels = c("HealthMap", "EIOS"))
+FAR_long$specificity <- 1 - FAR_long$false_alarm_rate
 
 ggplot(FAR_long, aes(x = country, y = false_alarm_rate, fill = source)) +
   geom_col(position = "dodge") + 
@@ -150,3 +199,12 @@ ggplot(FAR_long, aes(x = country, y = false_alarm_rate, fill = source)) +
        caption = "WHO FluNet data were used as gold standard") +
   scale_x_discrete(limits = rev(levels(FAR_long$country))) +
   scale_fill_brewer(palette = "Set1")
+
+ggplot(FAR_long, aes(x = country, y = specificity, fill = source)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "Specificity of HealthMap and EIOS systems", y = "False alarm rate", x = "", 
+       caption = "WHO FluNet data were used as gold standard") +
+  scale_x_discrete(limits = rev(levels(FAR_long$country))) +
+  scale_fill_brewer(palette = "Set1")
+
