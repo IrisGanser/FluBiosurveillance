@@ -58,7 +58,7 @@ EIOSreports <- EIOSreports[-which(is.na(EIOSreports$importDate)), ] # remove all
 
 
 # summarize into weekly data
-EIOS_byweek <- EIOSreports %>% group_by(date = floor_date(importDate, "week"), country = Country, .drop = FALSE) %>%
+EIOS_byweek <- EIOSreports %>% group_by(date = floor_date(importDate, "week", week_start = 1), country = Country, .drop = FALSE) %>%
   summarize(counts=n()) %>% as.data.frame()
 EIOS_byweek <- EIOS_byweek[order(EIOS_byweek$country), ]
 
@@ -213,98 +213,7 @@ for (i in seq_along(cpm_countries)) {
   #ggsave(plot = plot, file = paste("FluNet smoothing", country_list[i], ".jpeg", sep=' '))
 }
 
-
-# apply cpm algorithm with Mann-Whitney method
-EIOS_byweek$cpm <- NA
-for (i in seq_along(cpm_countries)) {
-  EIOS_temp <- filter(EIOS_byweek, country == cpm_countries[i])
-  
-  cpm_temp <- processStream(EIOS_temp$counts, cpmType = "Mann-Whitney", startup = 10, ARL0 = 500)
-  EIOS_temp$cpm[cpm_temp$changePoints] <- EIOS_temp$date[cpm_temp$changePoints]
-  EIOS_byweek$cpm[EIOS_byweek$country == cpm_countries[i]] <- EIOS_temp$cpm
-}
-
-# apply criteria for start of epidemics
-EIOS_byweek$cpm_start <- NA
-for (i in seq_along(cpm_countries)) {
-  EIOS_temp <- filter(EIOS_byweek, country == cpm_countries[i])
-  
-  for(j in 2:13){ # first few rows without looking back for previous outbreak
-    if(is.na(EIOS_temp$cpm[j]) == FALSE &
-       EIOS_temp$count_smooth[j] > EIOS_temp$count_smooth[j-1]){
-      EIOS_temp$cpm_start[j] <- EIOS_temp$date[j]
-    } else {
-      EIOS_temp$cpm_start[j] <- NA
-    }
-  }
-  for(j in 10:nrow(EIOS_temp)){
-    if(is.na(EIOS_temp$cpm[j]) == FALSE & # change point
-       EIOS_temp$count_smooth[j] > EIOS_temp$count_smooth[j-1] & # smoothed mean to ensure that curve is rising 
-       sum(!is.na(EIOS_temp$cpm_start[(j-10):(j-1)])) == 0){ # No outbreak flagged during the previous 10 weeks
-      EIOS_temp$cpm_start[j] <- EIOS_temp$date[j]
-    } else {
-      EIOS_temp$cpm_start[j] <- NA
-    }
-  }
-  EIOS_byweek$cpm_start[EIOS_byweek$country==cpm_countries[i]] <- EIOS_temp$cpm_start
-}
-
-
-
-#  apply criteria for end of epidemics
-EIOS_byweek$cpm_end <- NA
-for (i in seq_along(cpm_countries)) { 
-  EIOS_temp <- filter(EIOS_byweek, country == cpm_countries[i])
-  
-  for(j in nrow(EIOS_temp):1){# run in reverse because otherwise, third criterion cannot be recognized
-    if(is.na(EIOS_temp$cpm[j]) == FALSE &
-       EIOS_temp$count_smooth[j] > EIOS_temp$count_smooth[j+1] & 
-       sum(!is.na(EIOS_temp$cpm_end[(j+1):(j+15)])) == 0){ 
-      EIOS_temp$cpm_end[j] <- EIOS_temp$date[j]
-    } else {
-      EIOS_temp$cpm_end[j] <- NA
-    }
-  }
-  EIOS_byweek$cpm_end[EIOS_byweek$country==cpm_countries[i]] <- EIOS_temp$cpm_end
-}
-
-
-# start and end indicators of epidemics
-EIOS_byweek$startend_cpm <- ifelse(is.na(EIOS_byweek$cpm_start) == FALSE, "start", 
-                                 ifelse(is.na(EIOS_byweek$cpm_end) == FALSE, "end", NA))
-
-
-#for spikes: if 'start' is not followed by an 'end' within 30 weeks, add an 'end' directly after - this period should be optimized
-for(i in 1:nrow(EIOS_byweek)){
-  if(EIOS_byweek$date[i] < "2019-09-01"){
-    if(is.na(EIOS_byweek$startend_cpm[i]) == FALSE){
-      if(EIOS_byweek$startend_cpm[i] == "start" & sum(EIOS_byweek$startend_cpm[(i+1):(i+30)] == "end", na.rm = TRUE) == 0){
-        EIOS_byweek$startend_cpm[i+1] <- "end"
-      }
-    }
-  }
-}
-
-
-# repeat date copying into cpm_start and cpm_end columns to correct for inserted 'ends' (and manually curated values)
-EIOS_byweek$cpm_end <- ifelse(EIOS_byweek$startend_cpm == "end", EIOS_byweek$date, NA)
-EIOS_byweek$cpm_start <- ifelse(EIOS_byweek$startend_cpm == "start", EIOS_byweek$date, NA)
-
-# look at plots
-for (i in seq_along(cpm_countries)) {
-  EIOS_temp <- filter(EIOS_byweek, country == cpm_countries[i])
-  
-  plot <- ggplot(EIOS_temp, aes(x = date, y = counts)) + 
-    geom_line(size = 0.75) +
-    scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
-    labs(x = "", y = "EIOS event counts", 
-         title = paste("EIOS data for", cpm_countries[i], "with start and end of epidemics", sep = " ")) + 
-    geom_vline(xintercept = na.omit(EIOS_temp$cpm_start[EIOS_temp$startend_cpm == "start"]), lty = 2, col = "red") +
-    geom_vline(xintercept = na.omit(EIOS_temp$cpm_end[EIOS_temp$startend_cpm == "end"]), lty = 2, col = "darkgreen")
-  
-  print(plot)
-  #ggsave(plot = plot, file = paste("FluNet smoothing", country_list[i], ".jpeg", sep=' '))
-}
+##cpm did not work for all of the countries
 
 
 ### apply EWMA to non bpc countries ### 
@@ -327,6 +236,22 @@ for(i in 1:nrow(EIOS_byweek)){
   }
 }
 
+### apply EARS to non-bcp countries ###
+for(i in seq_along(non_bcp_countries)){
+  EIOS_temp <- filter(EIOS_byweek, country == non_bcp_countries[i])
+  
+  EIOS_temp_Counts <- EIOS_temp$counts
+  EIOS_temp_Epoch <- as.Date(EIOS_temp$date)
+  EIOS_temp_sts <- sts(observed = EIOS_temp_Counts, epoch = EIOS_temp_Epoch, epochAsDate = TRUE)
+  
+  
+  EIOS_temp_outbreak_C2_7 <- earsC(EIOS_temp_sts, control = list(
+    method = "C2", baseline = 7, minSigma = 1, alpha = 0.01
+  ))
+  plot(EIOS_temp_outbreak_C2_7, main = paste("EIOS data for", non_bcp_countries[i], "EARS C2, 7 weeks baseline", sep = " "))
+}
+## looks very ugly too
+
 #### set binary 'epidemic' indicator ####
 EIOS_byweek$epidemic <- NA
 
@@ -337,11 +262,10 @@ EIOS_epidemic <- EIOS_byweek %>% filter(country %in% bcp_countries) %>%
   mutate(epidemic = replace(startend_bcp, first(startend_bcp) == 'start', TRUE)) %>% 
   ungroup() %>% 
   select(-grp) 
-EIOS_epidemic$epidemic[which(EIOS_epidemic$epidemic == "end")] <- FALSE
+EIOS_epidemic$epidemic[which(EIOS_epidemic$epidemic == "end")] <- TRUE
 EIOS_epidemic$epidemic[which(is.na(EIOS_epidemic$epidemic) == TRUE)] <- FALSE
 
-EIOS_epidemic <- rbind(filter(EIOS_byweek, country %in% non_bcp_countries), EIOS_epidemic) %>% 
-  select(-c("cpm", "cpm_start", "cpm_end", "startend_cpm"))
+EIOS_epidemic <- rbind(filter(EIOS_byweek, country %in% non_bcp_countries), EIOS_epidemic)
 EIOS_epidemic <- EIOS_epidemic[order(EIOS_epidemic$country), ]
 
 
@@ -363,4 +287,4 @@ for (i in seq_along(country_list)) {
 }
 
 # write data in file
-# write.csv(EIOS_epidemic, file = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/EIOS_epidemic.csv")
+#write.csv(EIOS_epidemic, file = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/EIOS_epidemic.csv")

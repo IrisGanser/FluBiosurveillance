@@ -45,7 +45,7 @@ dataHM <- filter(dataHM, !(country %in% overseas_territories | place_name %in% o
 dataHM$country <- factor(dataHM$country)
 
 
-HM_byweek <- dataHM %>% group_by(date = floor_date(load_date, "week"), country = country, .drop = FALSE) %>%
+HM_byweek <- dataHM %>% group_by(date = floor_date(load_date, "week", week_start = 1), country = country, .drop = FALSE) %>%
   summarize(counts=n()) %>% as.data.frame()
 HM_byweek <- HM_byweek[order(HM_byweek$country), ]
 
@@ -341,7 +341,7 @@ HM_epidemic <- HM_byweek %>% filter(country %in% high_count_countries | country 
   mutate(epidemic = replace(startend, first(startend) == 'start', TRUE)) %>% 
   ungroup() %>% 
   select(-grp) 
-HM_epidemic$epidemic[which(HM_epidemic$epidemic == "end")] <- FALSE
+HM_epidemic$epidemic[which(HM_epidemic$epidemic == "end")] <- TRUE
 HM_epidemic$epidemic[which(is.na(HM_epidemic$epidemic) == TRUE)] <- FALSE
 
 HM_epidemic <- rbind(filter(HM_byweek, country %in% non_cpm_countries), HM_epidemic) 
@@ -367,4 +367,4 @@ for (i in seq_along(country_list)) {
 }
 
 # write data in file
-# write.csv(HM_epidemic, file = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/HealthMap_epidemic.csv")
+#write.csv(HM_epidemic, file = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/HealthMap_epidemic.csv")
