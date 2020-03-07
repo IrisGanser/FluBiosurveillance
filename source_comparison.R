@@ -14,7 +14,7 @@ EIOS_epidemic$date <- as.POSIXct(EIOS_epidemic$date)
 
 country_list <- levels(FluNet_epidemic$Country)
 
-# revise startend columns of HM and EIOS datasets
+# revise startend columns of datasets
 HM_epidemic$startend <- NA
 for(i in 2:nrow(HM_epidemic)){
   if(HM_epidemic$epidemic[i] == TRUE & HM_epidemic$epidemic[i-1] == FALSE){
@@ -32,6 +32,22 @@ for(i in 2:nrow(EIOS_epidemic)){
     EIOS_epidemic$startend[i] <- "end"
   }
 }
+
+FluNet_epidemic$startend <- NA
+for(i in 2:nrow(FluNet_epidemic)){
+  if(FluNet_epidemic$epidemic[i] == TRUE & FluNet_epidemic$epidemic[i-1] == FALSE){
+    FluNet_epidemic$startend[i] <- "start"
+  }else if(FluNet_epidemic$epidemic[i] == FALSE & FluNet_epidemic$epidemic[i-1] == TRUE){
+    FluNet_epidemic$startend[i] <- "end"
+  }
+}
+
+# outbreak periods (from one start to next start)
+HM_epidemic <- HM_epidemic %>% group_by(country) %>% mutate(outbreak_period = ((cumsum(!is.na(startend))-1) %/% 2) + 1)
+EIOS_epidemic <- EIOS_epidemic %>% group_by(country) %>% mutate(outbreak_period = ((cumsum(!is.na(startend))-1) %/% 2) + 1)
+FluNet_epidemic <- FluNet_epidemic %>% group_by(Country) %>% mutate(outbreak_period = ((cumsum(!is.na(startend))-1) %/% 2) + 1)
+
+
 
 # calculate summary information on outbreaks
 FluNet_outbreak_length <- FluNet_epidemic %>% filter(epidemic == TRUE) %>% group_by(Country, grp = cumsum(!is.na(startend))) %>% 
@@ -206,5 +222,84 @@ ggplot(FAR_long, aes(x = country, y = specificity, fill = source)) +
   labs(title = "Specificity of HealthMap and EIOS systems", y = "False alarm rate", x = "", 
        caption = "WHO FluNet data were used as gold standard") +
   scale_x_discrete(limits = rev(levels(FAR_long$country))) +
+  scale_fill_brewer(palette = "Set1")
+
+
+##### calculate timeliness#####
+#  input df is data frame with 3 col: date, baseline, baseline + outbreak
+#  input truth is list with element: state, which is binary vector indicating presence of outbreak
+#  output is proportion of outbreak "prevented" (from 1 for first day to 0 for last day of outbreak, or later)
+
+
+
+timeliness_HM <- vector(mode = "list")
+timeliness_EIOS <- vector(mode = "list")
+for(i in seq_along(country_list)){
+  FluNet_HM_temp <- filter(FluNet_epidemic, Country == country_list[i] &
+                             SDATE %within% interval(min(HM_epidemic$date), max(HM_epidemic$date)))
+  prevented <- 0
+  for(j in 1:max(FluNet_HM_temp$outbreak_period)){
+    FluNet_HM_temp_ob <- filter(FluNet_HM_temp, outbreak_period == j)
+    HM_temp <- filter(HM_epidemic, country == country_list[i] & 
+                        date %within% interval(min(FluNet_HM_temp_ob$SDATE), max(FluNet_HM_temp_ob$SDATE)))
+    
+    state <- FluNet_HM_temp_ob$epidemic
+    alarm <- HM_temp$epidemic
+    length <- sum(FluNet_HM_temp_ob$epidemic)
+    
+    detect <- ifelse(sum(alarm[state == TRUE], na.rm = TRUE) > 0, TRUE, FALSE)
+    if (detect) {
+      first.alarm <- min(which(alarm[state == TRUE] == TRUE))
+      prevented[j] <- (length - first.alarm) / length
+    }else{
+      prevented[j] <- 0
+    }
+  }
+  timeliness_HM$country[i] <- country_list[i]
+  timeliness_HM$timeliness[i] <- mean(prevented, na.rm = TRUE)
+}  
+
+for(i in seq_along(country_list)){
+  FluNet_EIOS_temp <- filter(FluNet_epidemic, Country == country_list[i] & 
+                               SDATE %within% interval(min(EIOS_epidemic$date), max(EIOS_epidemic$date)))
+  FluNet_EIOS_temp <- FluNet_EIOS_temp %>% group_by(Country) %>% mutate(outbreak_period = ((cumsum(!is.na(startend))-1) %/% 2) + 1)
+  
+  prevented <- 0
+  for(j in 1:max(FluNet_EIOS_temp$outbreak_period)){
+    FluNet_EIOS_temp_ob <- filter(FluNet_EIOS_temp, outbreak_period == j)
+    EIOS_temp <- filter(EIOS_epidemic, country == country_list[i] & 
+                        date %within% interval(min(FluNet_EIOS_temp_ob$SDATE), max(FluNet_EIOS_temp_ob$SDATE)))
+    
+    state <- FluNet_EIOS_temp_ob$epidemic
+    alarm <- EIOS_temp$epidemic
+    length <- sum(FluNet_EIOS_temp_ob$epidemic)
+    
+    detect <- ifelse(sum(alarm[state == TRUE], na.rm = TRUE) > 0, TRUE, FALSE)
+    if (detect == TRUE){
+      first.alarm <- min(which(alarm[state == TRUE] == TRUE))
+      prevented[j] <- (length - first.alarm) / length
+    }else{
+      prevented[j] <- 0
+    }
+  }
+  timeliness_EIOS$country[i] <- country_list[i]
+  timeliness_EIOS$timeliness[i] <- mean(prevented, na.rm = TRUE)
+} 
+
+timeliness <- data.frame(timeliness_HM$country, timeliness_HM$timeliness, timeliness_EIOS$timeliness)
+names(timeliness) <- c("country", "frac_prevented_HM", "frac_prevented_EIOS")
+
+timeliness_long <- pivot_longer(timeliness, cols = c(frac_prevented_HM, frac_prevented_EIOS), 
+                                names_to = "source", values_to = "frac_prevented")
+timeliness_long$source <- factor(timeliness_long$source, levels = c("frac_prevented_HM", "frac_prevented_EIOS"), 
+                                 labels = c("HealthMap", "EIOS"))
+
+
+ggplot(timeliness_long, aes(x = country, y = frac_prevented, fill = source)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "Timeliness (prevented fraction) of HealthMap and EIOS systems", y = "prevented fraction", x = "", 
+       caption = "WHO FluNet data were used as gold standard") +
+  scale_x_discrete(limits = rev(levels(timeliness_long$country))) +
   scale_fill_brewer(palette = "Set1")
 
