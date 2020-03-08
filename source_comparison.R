@@ -73,21 +73,21 @@ EIOS_outbreak_length$outbreak_interval <- interval(EIOS_outbreak_length$start_da
 
 outbreaks_detected <- vector(mode = "list")
 for(i in seq_along(country_list)){
-  FluNet_EIOS_temp <- filter(FluNet_outbreak_length, Country == country_list[i] & 
+  FluNet_EIOS_temp_ol <- filter(FluNet_outbreak_length, Country == country_list[i] & 
                                start_date %within% interval(min(EIOS_epidemic$date), max(EIOS_epidemic$date)))
-  FluNet_HM_temp <- filter(FluNet_outbreak_length, Country == country_list[i] & 
+  FluNet_HM_temp_ol <- filter(FluNet_outbreak_length, Country == country_list[i] & 
                              start_date %within% interval(min(HM_epidemic$date), max(HM_epidemic$date)))
-  HM_temp <- filter(HM_outbreak_length, country == country_list[i])
-  EIOS_temp <- filter(EIOS_outbreak_length, country == country_list[i])
+  HM_temp_ol <- filter(HM_outbreak_length, country == country_list[i])
+  EIOS_temp_ol <- filter(EIOS_outbreak_length, country == country_list[i])
  
   sum_HM <- NA
-  for(j in 1:nrow(HM_temp)){
-    sum_HM[j] <- sum(int_overlaps(HM_temp$outbreak_interval[j], FluNet_HM_temp$outbreak_interval))
+  for(j in 1:nrow(HM_temp_ol)){
+    sum_HM[j] <- sum(int_overlaps(HM_temp_ol$outbreak_interval[j], FluNet_HM_temp_ol$outbreak_interval))
     no_detected_outbreaks_HM <- sum(sum_HM)
   }
   sum_EIOS <- NA
-  for(k in 1:nrow(EIOS_temp)){
-    sum_EIOS[k] <- sum(int_overlaps(EIOS_temp$outbreak_interval[k], FluNet_EIOS_temp$outbreak_interval))
+  for(k in 1:nrow(EIOS_temp_ol)){
+    sum_EIOS[k] <- sum(int_overlaps(EIOS_temp_ol$outbreak_interval[k], FluNet_EIOS_temp_ol$outbreak_interval))
     no_detected_outbreaks_EIOS <- sum(sum_EIOS)
   } 
   
@@ -95,12 +95,6 @@ for(i in seq_along(country_list)){
   outbreaks_detected$no_HM[i] <- no_detected_outbreaks_HM
   outbreaks_detected$no_EIOS[i] <- no_detected_outbreaks_EIOS
 }
-
-FluNet_EIOS_temp <- filter(FluNet_outbreak_length, Country == "Argentina" & 
-                             start_date %within% interval(min(EIOS_epidemic$date), max(EIOS_epidemic$date)))
-EIOS_temp <- filter(EIOS_outbreak_length, country == "Argentina")
-
-
 
 
 FluNet_outbreaks_for_HM <- filter(FluNet_outbreak_length, start_date %within% interval(min(HM_epidemic$date), max(HM_epidemic$date))) %>% 
@@ -110,27 +104,29 @@ FluNet_outbreaks_for_EIOS <- filter(FluNet_outbreak_length, start_date %within% 
   group_by(Country) %>% summarize(no_FluNet_for_EIOS = n())
 
 
-no_outbreaks <- data.frame(outbreaks_detected$country, FluNet_outbreaks_for_HM$no_FluNet_for_HM, outbreaks_detected$no_HM,
+sens_per_outbreak <- data.frame(outbreaks_detected$country, FluNet_outbreaks_for_HM$no_FluNet_for_HM, outbreaks_detected$no_HM,
                            FluNet_outbreaks_for_EIOS$no_FluNet_for_EIOS, outbreaks_detected$no_EIOS)
-names(no_outbreaks) <- c("country", "no_FluNet_for_HM", "no_HM", "no_FluNet_for_EIOS", "no_EIOS")
+names(sens_per_outbreak) <- c("country", "no_FluNet_for_HM", "no_HM", "no_FluNet_for_EIOS", "no_EIOS")
 
-no_outbreaks <- no_outbreaks %>% mutate(sens_HM = no_HM/no_FluNet_for_HM*100, sens_EIOS = no_EIOS/no_FluNet_for_EIOS*100)
+sens_per_outbreak <- sens_per_outbreak %>% mutate(sens_HM = no_HM/no_FluNet_for_HM, sens_EIOS = no_EIOS/no_FluNet_for_EIOS)
 
 #write.csv(no_outbreaks, file = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/sensitivity.csv")
 
 
 # prepare data for plotting and plot
-source_sensitivity <- pivot_longer(no_outbreaks, cols = c(sens_HM, sens_EIOS), names_to = "source", values_to = "sensitivity")
-source_sensitivity$source <- factor(source_sensitivity$source, levels = c("sens_HM", "sens_EIOS"), labels = c("HealthMap", "EIOS"))
-source_sensitivity$sensitivity <- ifelse(source_sensitivity$sensitivity > 100, 100, source_sensitivity$sensitivity)
+sens_per_outbreak_long <- pivot_longer(sens_per_outbreak, cols = c(sens_HM, sens_EIOS), names_to = "source", values_to = "sensitivity")
+sens_per_outbreak_long$source <- factor(sens_per_outbreak_long$source, levels = c("sens_HM", "sens_EIOS"), labels = c("HealthMap", "EIOS"))
+sens_per_outbreak_long$sensitivity <- ifelse(sens_per_outbreak_long$sensitivity > 1, 1, sens_per_outbreak_long$sensitivity)
 
-ggplot(source_sensitivity, aes(x = country, y = sensitivity, fill = source)) +
+ggplot(sens_per_outbreak_long, aes(x = country, y = sensitivity * 100, fill = source)) +
   geom_col(position = "dodge") + 
   coord_flip() + 
-  labs(title = "Sensitivity per outbreak of HealthMap and EIOS systems", y = "sensitivity (%)", x = "", 
+  labs(title = "Sensitivity per outbreak of HealthMap and EIOS systems", y = "Sensitivity per outbreak (%)", x = "", 
        caption = "WHO FluNet data were used as gold standard") +
-  scale_x_discrete(limits = rev(levels(source_sensitivity$country))) +
+  scale_x_discrete(limits = rev(levels(sens_per_outbreak_long$country))) +
   scale_fill_brewer(palette = "Set1")
+
+
 
 ##### calculate sensitivity per week #####
 sens_per_week_list <- vector(mode = "list")
@@ -145,12 +141,12 @@ for(i in seq_along(country_list)){
   state_HM <- FluNet_HM_temp$epidemic
   alarm_HM <- HM_temp$epidemic
   sens_HM <- sum(alarm_HM[state_HM == TRUE], na.rm = TRUE)
-  sens_HM <- FA_HM / length(alarm_HM[state_HM == TRUE])
+  sens_HM <- sens_HM / length(alarm_HM[state_HM == TRUE])
   
   state_EIOS <- FluNet_EIOS_temp$epidemic
   alarm_EIOS <- EIOS_temp$epidemic
   sens_EIOS <- sum(alarm_EIOS[state_EIOS == TRUE], na.rm = TRUE)
-  sens_EIOS <- FA_EIOS / length(alarm_EIOS[state_EIOS == TRUE])
+  sens_EIOS <- sens_EIOS / length(alarm_EIOS[state_EIOS == TRUE])
   
   sens_per_week_list$country[i] <- country_list[i]
   sens_per_week_list$sens_HM[i] <- sens_HM
@@ -164,12 +160,13 @@ sens_per_week_long <- pivot_longer(sens_per_week, cols = c(sens_HM, sens_EIOS), 
                                    values_to = "sensitivity_per_week")
 sens_per_week_long$source <- factor(sens_per_week_long$source, levels = c("sens_HM", "sens_EIOS"), labels = c("HealthMap", "EIOS"))
 
-ggplot(sens_per_week_long, aes(x = country, y = sensitivity_per_week, fill = source)) +
+ggplot(sens_per_week_long, aes(x = country, y = sensitivity_per_week * 100, fill = source)) +
   geom_col(position = "dodge") + 
   coord_flip() + 
-  labs(title = "Sensitivity per week of HealthMap and EIOS systems", y = "Sensitivity per week", x = "", 
+  labs(title = "Sensitivity per week of HealthMap and EIOS systems", y = "Sensitivity per week (%)", x = "", 
        caption = "WHO FluNet data were used as gold standard") +
   scale_x_discrete(limits = rev(levels(sens_per_week_long$country))) +
+  scale_y_continuous(limits = c(0, 100)) + 
   scale_fill_brewer(palette = "Set1")
 
 
@@ -216,10 +213,10 @@ ggplot(FAR_long, aes(x = country, y = false_alarm_rate, fill = source)) +
   scale_x_discrete(limits = rev(levels(FAR_long$country))) +
   scale_fill_brewer(palette = "Set1")
 
-ggplot(FAR_long, aes(x = country, y = specificity, fill = source)) +
+ggplot(FAR_long, aes(x = country, y = specificity * 100, fill = source)) +
   geom_col(position = "dodge") + 
   coord_flip() + 
-  labs(title = "Specificity of HealthMap and EIOS systems", y = "False alarm rate", x = "", 
+  labs(title = "Specificity of HealthMap and EIOS systems", y = "Specificity (%)", x = "", 
        caption = "WHO FluNet data were used as gold standard") +
   scale_x_discrete(limits = rev(levels(FAR_long$country))) +
   scale_fill_brewer(palette = "Set1")
@@ -229,7 +226,6 @@ ggplot(FAR_long, aes(x = country, y = specificity, fill = source)) +
 #  input df is data frame with 3 col: date, baseline, baseline + outbreak
 #  input truth is list with element: state, which is binary vector indicating presence of outbreak
 #  output is proportion of outbreak "prevented" (from 1 for first day to 0 for last day of outbreak, or later)
-
 
 
 timeliness_HM <- vector(mode = "list")
@@ -303,3 +299,26 @@ ggplot(timeliness_long, aes(x = country, y = frac_prevented, fill = source)) +
   scale_x_discrete(limits = rev(levels(timeliness_long$country))) +
   scale_fill_brewer(palette = "Set1")
 
+
+##### combine all metrics into one dataframe ##### 
+metrics <- data.frame(sens_per_outbreak_long$country, sens_per_outbreak_long$source, sens_per_outbreak_long$sensitivity, 
+                       sens_per_week_long$sensitivity_per_week, FAR_long$specificity, timeliness_long$frac_prevented)
+names(metrics) <- c("country", "source", "sens_per_outbreak", "sens_per_week", "specificity", "frac_prevented")
+
+metrics_long <- pivot_longer(metrics, cols = c(sens_per_outbreak, sens_per_week, specificity, frac_prevented), 
+                             names_to = "metric", values_to = "values")
+
+
+for(i in seq_along(country_list)){
+  metrics_temp <- filter(metrics_long, country == country_list[i])
+
+  plot <- ggplot(metrics_temp, aes(x = metric, y = values, fill = source)) +
+    geom_col(position = "dodge") +
+    labs(title = paste(country_list[i], ": Evaluation of HealthMap and EIOS systems", sep = ""), y = "", x = "", 
+         caption = "WHO FluNet data were used as gold standard") +
+    scale_x_discrete(labels = c('Prevented fraction \n (Timeliness)','Sensitivity per outbreak', 'Sensitivity per week', 'Specificity')) +
+    scale_y_continuous(limits = c(0, 1)) + 
+    scale_fill_brewer(palette = "Set1") 
+  print(plot)
+  ggsave(plot = plot, file = paste("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/Evaluation metrics", country_list[i], ".jpeg", sep=' '))
+}
