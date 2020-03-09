@@ -363,7 +363,7 @@ FluNet_data <- FluNet_data %>%
   mutate(epidemic = replace(startend, first(startend) == 'start', TRUE)) %>% 
   ungroup() %>% 
   select(-grp) 
-FluNet_data$epidemic[which(FluNet_data$epidemic == "end")] <- FALSE
+FluNet_data$epidemic[which(FluNet_data$epidemic == "end")] <- TRUE
 FluNet_data$epidemic[which(is.na(FluNet_data$epidemic) == TRUE)] <- FALSE
 
 
