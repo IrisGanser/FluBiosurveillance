@@ -186,8 +186,9 @@ influenza_zones$country_name <- revalue(influenza_zones$country_name,
 influenza_zones$country_name <- as.factor(influenza_zones$country_name)
 
 
-indicators <- data.frame(country = FluNet_total$Country, FluNet_total_cat = FluNet_total$total_cat, 
-                         HM_total_cat = HM_total$total_cat, EIOS_total_cat = EIOS_total$total_cat)
+indicators <- data.frame(country = FluNet_total$Country, FluNet_total_cat = FluNet_total$total_cat, FluNet_total = FluNet_total$total,
+                         FluNet_max = FluNet_total$max, HM_total_cat = HM_total$total_cat, HM_total = HM_total$total, HM_max = HM_total$max,
+                         EIOS_total = EIOS_total$total, EIOS_max = EIOS_total$max, EIOS_total_cat = EIOS_total$total_cat)
 indicators <- left_join(indicators, influenza_zones, by = c("country" = "country_name"))
 indicators$country <- as.factor(indicators$country)
 indicators$influenza_transmission_zone <- as.factor(indicators$influenza_transmission_zone)
@@ -210,9 +211,9 @@ for(i in 1:nrow(indicators)){
 indicators$english <- ifelse(indicators$country %in% c("Australia", "United Kingdom", "United States"), TRUE, FALSE)
 
 languages <- c("Spanish", "English", "Portuguese", "Bulgarian", "Chinese", "Spanish", "Spanish", "Arabic", "French",
-               "German", "Greek", "Hindi", "Farsi", "Spanish", "English", "Russian", "Arabic", "Afrikaans", "Swedish",
+               "German", "Greek", "Hindi", "Farsi", "Spanish", "Hausa", "Russian", "Arabic", "Afrikaans", "Swedish",
                "Thai", "English", "English", "Spanish", "Vietnamese")
-indicators$official_language <- languages
+indicators$language <- languages
 
 
 indicators$problematic_FluNet <- ifelse(indicators$country %in% c("Nigeria", "Thailand", "Vietnam"), TRUE, FALSE)
@@ -223,4 +224,4 @@ indicators$country[indicators$problematic_EIOS]
 indicators$problematic_HM <- ifelse(indicators$HM_total_cat == "low", TRUE, FALSE)
 indicators$country[indicators$problematic_HM]
 
-# write.csv(indicators, file = "country_indicators.csv")
+write.csv(indicators, file = "country_indicators.csv")
