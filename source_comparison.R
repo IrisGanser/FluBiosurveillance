@@ -228,6 +228,50 @@ ggplot(sens_exact_long, aes(x = country, y = exact_sensitivity * 100, fill = sou
   scale_fill_brewer(palette = "Set1")
 #ggsave(filename = "all_countries_sens_exact.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic")
 
+
+##### positive predictive value per week #####
+PPV_list <- vector(mode = "list")
+for(i in seq_along(country_list)){
+  FluNet_EIOS_temp <- filter(FluNet_epidemic, Country == country_list[i] & 
+                               SDATE %within% interval(min(EIOS_epidemic$date), max(EIOS_epidemic$date)))
+  FluNet_HM_temp <- filter(FluNet_epidemic, Country == country_list[i] & 
+                             SDATE %within% interval(min(HM_epidemic$date), max(HM_epidemic$date)))
+  HM_temp <- filter(HM_epidemic, country == country_list[i])
+  EIOS_temp <- filter(EIOS_epidemic, country == country_list[i])
+  
+  state_HM <- FluNet_HM_temp$epidemic
+  alarm_HM <- HM_temp$epidemic
+  TP_HM <- sum(alarm_HM[state_HM == TRUE], na.rm = TRUE)
+  PPV_HM <- TP_HM / sum(alarm_HM, na.rm = TRUE)
+  
+  state_EIOS <- FluNet_EIOS_temp$epidemic
+  alarm_EIOS <- EIOS_temp$epidemic
+  TP_EIOS <- sum(alarm_EIOS[state_EIOS == TRUE], na.rm = TRUE)
+  PPV_EIOS <- TP_EIOS / sum(alarm_EIOS, na.rm = TRUE)
+  
+  PPV_list$country[i] <- country_list[i]
+  PPV_list$PPV_HM[i] <- PPV_HM
+  PPV_list$PPV_EIOS[i] <- PPV_EIOS
+}
+
+PPV <- data.frame(PPV_list$country, PPV_list$PPV_HM, PPV_list$PPV_EIOS)
+names(PPV) <- c("country", "PPV_HM", "PPV_EIOS")
+
+PPV_long <- pivot_longer(PPV, cols = c(PPV_HM, PPV_EIOS), names_to = "source", values_to = "PPV")
+PPV_long$source <- factor(PPV_long$source, levels = c("PPV_HM", "PPV_EIOS"), labels = c("HealthMap", "EIOS"))
+
+ggplot(PPV_long, aes(x = country, y = PPV, fill = source)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "Positive predictive value of HealthMap and EIOS systems", y = "Positive predictive value", x = "", 
+       caption = "WHO FluNet data were used as gold standard") +
+  scale_x_discrete(limits = rev(levels(PPV_long$country))) +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_fill_brewer(palette = "Set1")
+#ggsave(filename = "all_countries_PPV.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic")
+
+
+
 ##### calculate false alarm rate #####
 # calculate false alert rate during non-outbreak intervals
 
@@ -433,17 +477,19 @@ ggplot(mean_time_detect_long, aes(x = country, y = mean_time, fill = source)) +
   labs(title = "Mean time to outbreak detection of HealthMap and EIOS systems", y = "mean time to outbreak detection (weeks)", x = "", 
        caption = "WHO FluNet data were used as gold standard \n
        Non-detected outbreaks are not counted") +
-  scale_x_discrete(limits = rev(levels(timeliness_long$country))) +
+  scale_x_discrete(limits = rev(levels(mean_time_detect_long$country))) +
   scale_fill_brewer(palette = "Set1")
+#ggsave(filename = "all_countries_mean_time.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic")
+
 
 
 ##### combine all metrics into one dataframe ##### 
 metrics <- data.frame(sens_per_outbreak_long$country, sens_per_outbreak_long$source, sens_per_outbreak_long$sensitivity, 
-                      sens_exact_long$exact_sensitivity, sens_per_week_long$sensitivity_per_week, FAR_long$specificity, timeliness_long$frac_prevented)
-names(metrics) <- c("country", "source", "sens_per_outbreak", "sens_exact", "sens_per_week", "specificity", "frac_prevented")
+                      sens_exact_long$exact_sensitivity, sens_per_week_long$sensitivity_per_week, PPV_long$PPV, FAR_long$specificity, timeliness_long$frac_prevented)
+names(metrics) <- c("country", "source", "sens_per_outbreak", "sens_exact", "sens_per_week", "PPV", "specificity", "frac_prevented")
 #write.csv(metrics, file = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/metrics.csv")
 
-metrics_long <- pivot_longer(metrics, cols = c(sens_per_outbreak, sens_per_week, sens_exact, specificity, frac_prevented), 
+metrics_long <- pivot_longer(metrics, cols = c(sens_per_outbreak, sens_per_week, sens_exact, PPV, specificity, frac_prevented), 
                              names_to = "metric", values_to = "values")
 
 
@@ -454,8 +500,8 @@ for(i in seq_along(country_list)){
     geom_col(position = "dodge") +
     labs(title = paste(country_list[i], ": Evaluation of HealthMap and EIOS systems", sep = ""), y = "", x = "", 
          caption = "WHO FluNet data were used as gold standard") +
-    scale_x_discrete(labels = c('Prevented fraction \n (Timeliness)', 'Exact sensitivity \n (+/- 1 week)', 
-                                'Sensitivity per \n outbreak', 'Sensitivity per \n week', 'Specificity')) +
+    scale_x_discrete(labels = c('Prevented fraction \n (Timeliness)', 'Positive \n predictive value', 'Exact sensitivity \n (+/- 1 week)', 
+                               'Sensitivity per \n outbreak', 'Sensitivity per \n week', 'Specificity')) +
     scale_y_continuous(limits = c(0, 1)) + 
     scale_fill_brewer(palette = "Set1") 
   print(plot)
