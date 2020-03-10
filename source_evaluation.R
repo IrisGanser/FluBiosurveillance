@@ -5,6 +5,7 @@ library(tidyr)
 library(RColorBrewer)
 library(ggrepel)
 library(gridExtra)
+library(GGally)
 
 
 
@@ -104,33 +105,33 @@ ggplot(metrics_EIOS, aes(x = PPV, y = sens_per_outbreak)) +
 ### HealthMap
 # y is prevented fraction, x is data abundance, language, region
 p1 <- ggplot(metrics_HM, aes(x = HM_total_cat, y = frac_prevented)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "Total event counts", y = "timeliness (prevented fraction)") + 
   scale_y_continuous(limits = c(0, 1))
 
 p2 <- ggplot(metrics_HM, aes(x = problematic_FluNet, y = frac_prevented)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "FluNet data problems", y = "") + 
   scale_y_continuous(limits = c(0, 1))  
 
 p3 <- ggplot(metrics_HM, aes(x = english, y = frac_prevented)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
   labs(x = "English", y = "") + 
   scale_y_continuous(limits = c(0, 1)) 
 
 p4 <- ggplot(metrics_HM, aes(x = global_region, y = frac_prevented)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "Geography", y = "timeliness (prevented fraction)") + 
   scale_y_continuous(limits = c(0, 1)) +
   scale_x_discrete(labels = c("temp. Northern \n hemisphere", "temp. Southern \n hemisphere", "tropical"))
 
 p5 <- ggplot(metrics_HM, aes(x = HM_total, y = frac_prevented)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "Total event counts over 6 years", y = "") + 
   scale_y_continuous(limits = c(0, 1)) 
 
 p6 <- ggplot(metrics_HM, aes(x = HM_max, y = frac_prevented)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "Maximum event counts per week", y = "") + 
   scale_y_continuous(limits = c(0, 1))
 
@@ -140,33 +141,33 @@ ggsave(plot = grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 3, top = "HealthMap ti
 
 # y is outbreak sensitivity, x is data abundance, language, region
 p1 <- ggplot(metrics_HM, aes(x = HM_total_cat, y = sens_per_outbreak)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "Total event counts", y = "outbreak sensitivity") + 
   scale_y_continuous(limits = c(0, 1))
 
 p2 <- ggplot(metrics_HM, aes(x = problematic_FluNet, y = sens_per_outbreak)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "FluNet data problems", y = "") + 
   scale_y_continuous(limits = c(0, 1))  
 
 p3 <- ggplot(metrics_HM, aes(x = english, y = sens_per_outbreak)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "English", y = "") + 
   scale_y_continuous(limits = c(0, 1)) 
 
 p4 <- ggplot(metrics_HM, aes(x = global_region, y = sens_per_outbreak)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "Geography", y = "outbreak sensitivity") + 
   scale_y_continuous(limits = c(0, 1)) +
   scale_x_discrete(labels = c("temp. Northern \n hemisphere", "temp. Southern \n hemisphere", "tropical"))
 
 p5 <- ggplot(metrics_HM, aes(x = HM_total, y = sens_per_outbreak)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "Total event counts over 6 years", y = "") + 
   scale_y_continuous(limits = c(0, 1)) 
 
 p6 <- ggplot(metrics_HM, aes(x = HM_max, y = sens_per_outbreak)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "Maximum event counts per week", y = "") + 
   scale_y_continuous(limits = c(0, 1))
 
@@ -174,35 +175,72 @@ grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 3, top = "HealthMap outbreak sensiti
 ggsave(plot = grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 3, top = "HealthMap outbreak sensitivity predictors"),
        filename = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/HM_outbreak_sens_predictors.jpeg", scale = 1.3)
 
+# y is exact sensitivity (detection +/- 1 week), x is data abundance, language, region
+p1 <- ggplot(metrics_HM, aes(x = HM_total_cat, y = sens_exact)) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
+  labs(x = "Total event counts", y = "exact sensitivity") + 
+  scale_y_continuous(limits = c(0, 1))
+
+p2 <- ggplot(metrics_HM, aes(x = problematic_FluNet, y = sens_exact)) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
+  labs(x = "FluNet data problems", y = "") + 
+  scale_y_continuous(limits = c(0, 1))  
+
+p3 <- ggplot(metrics_HM, aes(x = english, y = sens_exact)) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
+  labs(x = "English", y = "") + 
+  scale_y_continuous(limits = c(0, 1)) 
+
+p4 <- ggplot(metrics_HM, aes(x = global_region, y = sens_exact)) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
+  labs(x = "Geography", y = "exact sensitivity") + 
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_x_discrete(labels = c("temp. Northern \n hemisphere", "temp. Southern \n hemisphere", "tropical"))
+
+p5 <- ggplot(metrics_HM, aes(x = HM_total, y = sens_exact)) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
+  labs(x = "Total event counts over 6 years", y = "") + 
+  scale_y_continuous(limits = c(0, 1)) 
+
+p6 <- ggplot(metrics_HM, aes(x = HM_max, y = sens_exact)) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
+  labs(x = "Maximum event counts per week", y = "") + 
+  scale_y_continuous(limits = c(0, 1))
+
+grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 3, top = "HealthMap sensitivity (outbreak detection within +/- 1 week) predictors")
+ggsave(plot = grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 3, top = "HealthMap sensitivity (outbreak detection within +/- 1 week) predictors"),
+       filename = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/HM_sens_exact_predictors.jpeg", scale = 1.3)
+
+
 # y is specificity, x is data abundance, language, region
 p1 <- ggplot(metrics_HM, aes(x = HM_total_cat, y = specificity)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "Total event counts", y = "specificity") + 
   scale_y_continuous(limits = c(0, 1))
 
 p2 <- ggplot(metrics_HM, aes(x = problematic_FluNet, y = specificity)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
   labs(x = "FluNet data problems", y = "") + 
   scale_y_continuous(limits = c(0, 1))  
 
 p3 <- ggplot(metrics_HM, aes(x = english, y = specificity)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
   labs(x = "English", y = "") + 
   scale_y_continuous(limits = c(0, 1)) 
 
 p4 <- ggplot(metrics_HM, aes(x = global_region, y = specificity)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
   labs(x = "Geography", y = "specificity") + 
   scale_y_continuous(limits = c(0, 1)) +
   scale_x_discrete(labels = c("temp. Northern \n hemisphere", "temp. Southern \n hemisphere", "tropical"))
 
 p5 <- ggplot(metrics_HM, aes(x = HM_total, y = specificity)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
   labs(x = "Total event counts over 6 years", y = "") + 
   scale_y_continuous(limits = c(0, 1)) 
 
 p6 <- ggplot(metrics_HM, aes(x = HM_max, y = specificity)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "Maximum event counts per week", y = "") + 
   scale_y_continuous(limits = c(0, 1))
 
@@ -213,33 +251,33 @@ ggsave(plot = grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 3, top = "HealthMap sp
 
 # y is PPV, x is data abundance, language, region
 p1 <- ggplot(metrics_HM, aes(x = HM_total_cat, y = PPV)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "Total event counts", y = "positive predictive value") + 
   scale_y_continuous(limits = c(0, 1))
 
 p2 <- ggplot(metrics_HM, aes(x = problematic_FluNet, y = PPV)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "FluNet data problems", y = "") + 
   scale_y_continuous(limits = c(0, 1))  
 
 p3 <- ggplot(metrics_HM, aes(x = english, y = PPV)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "English", y = "") + 
   scale_y_continuous(limits = c(0, 1)) 
 
 p4 <- ggplot(metrics_HM, aes(x = global_region, y = PPV)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
   labs(x = "Geography", y = "positive predictive value") + 
   scale_y_continuous(limits = c(0, 1)) +
   scale_x_discrete(labels = c("temp. Northern \n hemisphere", "temp. Southern \n hemisphere", "tropical"))
 
 p5 <- ggplot(metrics_HM, aes(x = HM_total, y = PPV)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
   labs(x = "Total event counts over 6 years", y = "") + 
   scale_y_continuous(limits = c(0, 1)) 
 
 p6 <- ggplot(metrics_HM, aes(x = HM_max, y = PPV)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
   labs(x = "Maximum event counts per week", y = "") + 
   scale_y_continuous(limits = c(0, 1))
 
@@ -247,37 +285,44 @@ grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 3, top = "HealthMap positive predict
 ggsave(plot = grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 3, top = "HealthMap positive predictive value predictors"),
        filename = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/HM_PPV_predictors.jpeg", scale = 1.3)
 
+# ggpairs plot of outcomes (sensitivity per outbreak, exact sensitivity, PPV, specificity, timeliness)
+ggpairs(metrics_HM, columns = c("sens_per_outbreak", "sens_exact", "PPV", "specificity", "frac_prevented"), 
+        title = "HealthMap evaluation metrics")
+ggsave(filename = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/HM_eval_metrics_pairs.jpeg")
+
+ggpairs(metrics_HM, columns = c("sens_per_outbreak", "HM_total", "HM_max", "global_region", "english", "problematic_FluNet"))
 
 
 ### EIOS
+# y is prevented fraction, x is data abundance, language, region
 p1 <- ggplot(metrics_EIOS, aes(x = EIOS_total_cat, y = frac_prevented)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "Total event counts", y = "timeliness (prevented fraction)") + 
   scale_y_continuous(limits = c(0, 1))
 
 p2 <- ggplot(metrics_EIOS, aes(x = problematic_FluNet, y = frac_prevented)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
   labs(x = "FluNet data problems", y = "") + 
   scale_y_continuous(limits = c(0, 1))  
 
 p3 <- ggplot(metrics_EIOS, aes(x = english, y = frac_prevented)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
   labs(x = "English", y = "") + 
   scale_y_continuous(limits = c(0, 1)) 
 
 p4 <- ggplot(metrics_EIOS, aes(x = global_region, y = frac_prevented)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
   labs(x = "Geography", y = "timeliness (prevented fraction)") + 
   scale_y_continuous(limits = c(0, 1)) +
   scale_x_discrete(labels = c("temp. Northern \n hemisphere", "temp. Southern \n hemisphere", "tropical"))
 
 p5 <- ggplot(metrics_EIOS, aes(x = EIOS_total, y = frac_prevented)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
   labs(x = "Total event counts over 2 years", y = "") + 
   scale_y_continuous(limits = c(0, 1)) 
 
 p6 <- ggplot(metrics_EIOS, aes(x = EIOS_max, y = frac_prevented)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "Maximum event counts per week", y = "") + 
   scale_y_continuous(limits = c(0, 1))
 
@@ -288,33 +333,33 @@ ggsave(plot = grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 3, top = "EIOS timelin
 
 # y is outbreak sensitivity, x is data abundance, language, region
 p1 <- ggplot(metrics_EIOS, aes(x = EIOS_total_cat, y = sens_per_outbreak)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "Total event counts", y = "outbreak sensitivity") + 
   scale_y_continuous(limits = c(0, 1))
 
 p2 <- ggplot(metrics_EIOS, aes(x = problematic_FluNet, y = sens_per_outbreak)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
   labs(x = "FluNet data problems", y = "") + 
   scale_y_continuous(limits = c(0, 1))  
 
 p3 <- ggplot(metrics_EIOS, aes(x = english, y = sens_per_outbreak)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
   labs(x = "English", y = "") + 
   scale_y_continuous(limits = c(0, 1)) 
 
 p4 <- ggplot(metrics_EIOS, aes(x = global_region, y = sens_per_outbreak)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
   labs(x = "Geography", y = "outbreak sensitivity") + 
   scale_y_continuous(limits = c(0, 1)) +
   scale_x_discrete(labels = c("temp. Northern \n hemisphere", "temp. Southern \n hemisphere", "tropical"))
 
 p5 <- ggplot(metrics_EIOS, aes(x = EIOS_total, y = sens_per_outbreak)) + 
-  geom_point(size = 2) + 
-  labs(x = "Total event counts over 6 years", y = "") + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
+  labs(x = "Total event counts over 2 years", y = "") + 
   scale_y_continuous(limits = c(0, 1)) 
 
 p6 <- ggplot(metrics_EIOS, aes(x = EIOS_max, y = sens_per_outbreak)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
   labs(x = "Maximum event counts per week", y = "") + 
   scale_y_continuous(limits = c(0, 1))
 
@@ -323,35 +368,73 @@ ggsave(plot = grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 3, top = "EIOS outbrea
        filename = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/EIOS_outbreak_sens_predictors.jpeg", scale = 1.3)
 
 
+# y is exact sensitivity (detection +/- 1 week), x is data abundance, language, region
+p1 <- ggplot(metrics_EIOS, aes(x = EIOS_total_cat, y = sens_exact)) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
+  labs(x = "Total event counts", y = "exact sensitivity") + 
+  scale_y_continuous(limits = c(0, 1))
+
+p2 <- ggplot(metrics_EIOS, aes(x = problematic_FluNet, y = sens_exact)) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
+  labs(x = "FluNet data problems", y = "") + 
+  scale_y_continuous(limits = c(0, 1))  
+
+p3 <- ggplot(metrics_EIOS, aes(x = english, y = sens_exact)) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
+  labs(x = "English", y = "") + 
+  scale_y_continuous(limits = c(0, 1)) 
+
+p4 <- ggplot(metrics_EIOS, aes(x = global_region, y = sens_exact)) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
+  labs(x = "Geography", y = "exact sensitivity") + 
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_x_discrete(labels = c("temp. Northern \n hemisphere", "temp. Southern \n hemisphere", "tropical"))
+
+p5 <- ggplot(metrics_EIOS, aes(x = EIOS_total, y = sens_exact)) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
+  labs(x = "Total event counts over 2 years", y = "") + 
+  scale_y_continuous(limits = c(0, 1)) 
+
+p6 <- ggplot(metrics_EIOS, aes(x = EIOS_max, y = sens_exact)) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +
+  labs(x = "Maximum event counts per week", y = "") + 
+  scale_y_continuous(limits = c(0, 1))
+
+grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 3, top = "EIOS sensitivity (outbreak detection within +/- 1 week) predictors")
+ggsave(plot = grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 3, top = "EIOS sensitivity (outbreak detection within +/- 1 week) predictors"),
+       filename = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/EIOS_sens_exact_predictors.jpeg", scale = 1.3)
+
+
+
 # y is specificity, x is data abundance, language, region
 p1 <- ggplot(metrics_EIOS, aes(x = EIOS_total_cat, y = specificity)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "Total event counts", y = "specificity") + 
   scale_y_continuous(limits = c(0, 1))
 
 p2 <- ggplot(metrics_EIOS, aes(x = problematic_FluNet, y = specificity)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +  
   labs(x = "FluNet data problems", y = "") + 
   scale_y_continuous(limits = c(0, 1))  
 
 p3 <- ggplot(metrics_EIOS, aes(x = english, y = specificity)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +  
   labs(x = "English", y = "") + 
   scale_y_continuous(limits = c(0, 1)) 
 
 p4 <- ggplot(metrics_EIOS, aes(x = global_region, y = specificity)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +  
   labs(x = "Geography", y = "specificity") + 
   scale_y_continuous(limits = c(0, 1)) +
   scale_x_discrete(labels = c("temp. Northern \n hemisphere", "temp. Southern \n hemisphere", "tropical"))
 
 p5 <- ggplot(metrics_EIOS, aes(x = EIOS_total, y = specificity)) + 
-  geom_point(size = 2) + 
-  labs(x = "Total event counts over 6 years", y = "") + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
+  labs(x = "Total event counts over 2 years", y = "") + 
   scale_y_continuous(limits = c(0, 1)) 
 
 p6 <- ggplot(metrics_EIOS, aes(x = EIOS_max, y = specificity)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "Maximum event counts per week", y = "") + 
   scale_y_continuous(limits = c(0, 1))
 
@@ -361,33 +444,33 @@ ggsave(plot = grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 3, top = "EIOS specifi
 
 # y is PPV, x is data abundance, language, region
 p1 <- ggplot(metrics_EIOS, aes(x = EIOS_total_cat, y = PPV)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +  
   labs(x = "Total event counts", y = "positive predictive value") + 
   scale_y_continuous(limits = c(0, 1))
 
 p2 <- ggplot(metrics_EIOS, aes(x = problematic_FluNet, y = PPV)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +  
   labs(x = "FluNet data problems", y = "") + 
   scale_y_continuous(limits = c(0, 1))  
 
 p3 <- ggplot(metrics_EIOS, aes(x = english, y = PPV)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "English", y = "") + 
   scale_y_continuous(limits = c(0, 1)) 
 
 p4 <- ggplot(metrics_EIOS, aes(x = global_region, y = PPV)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +  
   labs(x = "Geography", y = "positive predictive value") + 
   scale_y_continuous(limits = c(0, 1)) +
   scale_x_discrete(labels = c("temp. Northern \n hemisphere", "temp. Southern \n hemisphere", "tropical"))
 
 p5 <- ggplot(metrics_EIOS, aes(x = EIOS_total, y = PPV)) + 
-  geom_point(size = 2) + 
-  labs(x = "Total event counts over 6 years", y = "") + 
+  geom_jitter(size = 2, width = 0.1, height = 0) +  
+  labs(x = "Total event counts over 2 years", y = "") + 
   scale_y_continuous(limits = c(0, 1)) 
 
 p6 <- ggplot(metrics_EIOS, aes(x = EIOS_max, y = PPV)) + 
-  geom_point(size = 2) + 
+  geom_jitter(size = 2, width = 0.1, height = 0) + 
   labs(x = "Maximum event counts per week", y = "") + 
   scale_y_continuous(limits = c(0, 1))
 
@@ -395,3 +478,63 @@ grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 3, top = "EIOS positive predictive v
 ggsave(plot = grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 3, top = "EIOS positive predictive value predictors"),
        filename = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/EIOS_PPV_predictors.jpeg", scale = 1.3)
 
+# ggpairs plot of outcomes (sensitivity per outbreak, exact sensitivity, PPV, specificity, timeliness)
+ggpairs(metrics_EIOS, columns = c("sens_per_outbreak", "sens_exact", "PPV", "specificity", "frac_prevented"), 
+        title = "EIOS evaluation metrics")
+ggsave(filename = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/EIOS_eval_metrics_pairs.jpeg")
+
+ggpairs(metrics_EIOS, columns = c("sens_per_outbreak", "EIOS_total", "EIOS_max", "global_region", "english", "problematic_FluNet"))
+
+
+##### regressions #####
+
+### HM
+# timeliness
+reg_HM_time <- lm(frac_prevented ~ HM_total_cat + global_region + english, data = metrics_HM)
+summary(reg_HM_time)
+
+# outbreak sensitivity
+reg_HM_outbreak_sens <- lm(sens_per_outbreak ~ HM_total_cat + global_region + english, data = metrics_HM)
+summary(reg_HM_outbreak_sens)
+
+# sensitivity per week
+reg_HM_week_sens <- lm(sens_per_week ~ HM_total_cat + global_region + english, data = metrics_HM)
+summary(reg_HM_week_sens)
+
+# exact sensitivity
+reg_HM_exact_sens <- lm(sens_exact ~ HM_total_cat + global_region + english, data = metrics_HM)
+summary(reg_HM_exact_sens)
+
+# specificity
+reg_HM_specificity <- lm(specificity ~ HM_total_cat + global_region + english, data = metrics_HM)
+summary(reg_HM_specificity)
+
+# PPV
+reg_HM_PPV <- lm(PPV ~ HM_total_cat + global_region + english, data = metrics_HM)
+summary(reg_HM_PPV)
+
+
+### EIOS
+# timeliness
+reg_EIOS_time <- lm(frac_prevented ~ EIOS_total_cat + global_region + english, data = metrics_EIOS)
+summary(reg_EIOS_time)
+
+# outbreak sensitivity
+reg_EIOS_outbreak_sens <- lm(sens_per_outbreak ~ EIOS_total_cat + global_region + english, data = metrics_EIOS)
+summary(reg_EIOS_outbreak_sens)
+
+# sensitivity per week
+reg_EIOS_week_sens <- lm(sens_per_week ~ EIOS_total_cat + global_region + english, data = metrics_EIOS)
+summary(reg_EIOS_week_sens)
+
+# exact sensitivity
+reg_EIOS_exact_sens <- lm(sens_exact ~ EIOS_total_cat + global_region + english, data = metrics_EIOS)
+summary(reg_EIOS_exact_sens)
+
+# specificity
+reg_EIOS_specificity <- lm(specificity ~ EIOS_total_cat + global_region + english, data = metrics_EIOS)
+summary(reg_EIOS_specificity)
+
+# PPV
+reg_EIOS_PPV <- lm(PPV ~ EIOS_total_cat + global_region + english, data = metrics_EIOS)
+summary(reg_EIOS_PPV)
