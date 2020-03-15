@@ -224,4 +224,33 @@ indicators$country[indicators$problematic_EIOS]
 indicators$problematic_HM <- ifelse(indicators$HM_total_cat == "low", TRUE, FALSE)
 indicators$country[indicators$problematic_HM]
 
-write.csv(indicators, file = "country_indicators.csv")
+
+
+# load other data for potential indicators
+HDI <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/HDI.csv", sep = ";", header = TRUE, 
+                na.strings = "..")
+HDI$Country <- sub(" ", "", HDI$Country)
+HDI$Country <- revalue(HDI$Country, c("Iran (Islamic Republic of)" = "Iran", "Russian Federation" = "Russia", "Viet Nam" = "Vietnam"))
+HDI <- HDI %>% select(Country, X2018) %>% filter(Country %in% country_list) %>% rename(country = Country, HDI.2018 = X2018)
+
+latlon <- read_excel("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/latlon.xlsx")
+
+press_freedom <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/press_freedom_index.csv", 
+                          sep = ";", header = TRUE)
+press_freedom$EN_country <- revalue(press_freedom$EN_country, c("Islamic Republic of Iran" = "Iran", "Russian Federation" = "Russia"))
+press_freedom <- press_freedom %>% filter(EN_country %in% country_list) %>% select(EN_country, Score.2018) %>%
+  rename(country = EN_country, PFI.2018 = Score.2018)
+press_freedom <- press_freedom[order(press_freedom$country), ]
+
+total_internet_users <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/total_internet_users.csv", 
+                                 sep = ";", header = TRUE, na.strings = "..")
+total_internet_users$Country <- sub(" ", "", total_internet_users$Country)
+total_internet_users$Country <- revalue(total_internet_users$Country, 
+                                        c("Iran (Islamic Republic of)" = "Iran", "Russian Federation" = "Russia", "Viet Nam" = "Vietnam"))
+total_internet_users <- total_internet_users %>% select(Country, X2017) %>% filter(Country %in% country_list) %>%
+  rename(country = Country, TIU.2017 = X2017)
+
+indicators <- cbind(indicators, HDI$HDI.2018, latlon$latitude, latlon$longitude, press_freedom$PFI.2018, total_internet_users$TIU.2017)
+names(indicators)[19:23] <- c("HDI.2018", "latitude", "longitude", "PFI.2018", "TIU.2017")
+
+write.csv(indicators, file = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/country_indicators.csv")
