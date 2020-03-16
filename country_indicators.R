@@ -188,7 +188,7 @@ influenza_zones$country_name <- as.factor(influenza_zones$country_name)
 
 indicators <- data.frame(country = FluNet_total$Country, FluNet_total_cat = FluNet_total$total_cat, FluNet_total = FluNet_total$total,
                          FluNet_max = FluNet_total$max, HM_total_cat = HM_total$total_cat, HM_total = HM_total$total, HM_max = HM_total$max,
-                         EIOS_total = EIOS_total$total, EIOS_max = EIOS_total$max, EIOS_total_cat = EIOS_total$total_cat)
+                         EIOS_total_cat = EIOS_total$total_cat, EIOS_total = EIOS_total$total, EIOS_max = EIOS_total$max)
 indicators <- left_join(indicators, influenza_zones, by = c("country" = "country_name"))
 indicators$country <- as.factor(indicators$country)
 indicators$influenza_transmission_zone <- as.factor(indicators$influenza_transmission_zone)
