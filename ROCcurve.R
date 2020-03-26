@@ -106,4 +106,211 @@ EIOS_sens_outbreak$country <- country_list
 EIOS_sens_outbreak <- select(EIOS_sens_outbreak, country, everything())
 
 
-### specificity
+### sensitivity per week ####
+HM_sens_week_list <- vector(mode = "list")
+EIOS_sens_week_list <- vector(mode = "list")
+
+for(i in seq_along(country_list)){
+  FluNet_HM_temp <- filter(FluNet_epidemic, Country == country_list[i] &
+                             SDATE %within% interval(min(HM_epidemic$date), max(HM_epidemic$date)))
+  FluNet_EIOS_temp <- filter(FluNet_epidemic, Country == country_list[i] & 
+                               SDATE %within% interval(min(EIOS_epidemic$date), max(EIOS_epidemic$date)))
+  HM_temp <- filter(HM_epidemic, country == country_list[i])
+  EIOS_temp <- filter(EIOS_epidemic, country == country_list[i])
+  
+  HM_sens_list <- sapply(57:73, function(x){
+    state_HM <- FluNet_HM_temp$epidemic
+    alarm_HM <- HM_temp[, x]
+    sens_HM <- sum(alarm_HM[state_HM == TRUE], na.rm = TRUE) / length(alarm_HM[state_HM == TRUE])
+    return(sens_HM)
+  })
+  
+  EIOS_sens_list <- sapply(57:73, function(x){
+    state_EIOS <- FluNet_EIOS_temp$epidemic
+    alarm_EIOS <- EIOS_temp[, x]
+    sens_EIOS <- sum(alarm_EIOS[state_EIOS == TRUE], na.rm = TRUE) / length(alarm_EIOS[state_EIOS == TRUE])
+    return(sens_EIOS)
+  })
+  
+  HM_sens_week_list[[i]] <- HM_sens_list
+  EIOS_sens_week_list[[i]] <- EIOS_sens_list
+}
+
+HM_sens_week <- data.frame(matrix(unlist(HM_sens_week_list), ncol = 17, byrow = TRUE))
+names(HM_sens_week) <- paste("bcp_", seq(0.1, 0.9, 0.05), sep = "")
+HM_sens_week$country <- country_list
+HM_sens_week <- select(HM_sens_week, country, everything())
+
+EIOS_sens_week <- data.frame(matrix(unlist(EIOS_sens_week_list), ncol = 17, byrow = TRUE))
+names(EIOS_sens_week) <- paste("bcp_", seq(0.1, 0.9, 0.05), sep = "")
+EIOS_sens_week$country <- country_list
+EIOS_sens_week <- select(EIOS_sens_week, country, everything())
+
+
+
+### false alarm rate
+HM_far_list <- vector(mode = "list")
+EIOS_far_list <- vector(mode = "list")
+
+for(i in seq_along(country_list)){
+  FluNet_HM_temp <- filter(FluNet_epidemic, Country == country_list[i] &
+                             SDATE %within% interval(min(HM_epidemic$date), max(HM_epidemic$date)))
+  FluNet_EIOS_temp <- filter(FluNet_epidemic, Country == country_list[i] & 
+                               SDATE %within% interval(min(EIOS_epidemic$date), max(EIOS_epidemic$date)))
+  HM_temp <- filter(HM_epidemic, country == country_list[i])
+  EIOS_temp <- filter(EIOS_epidemic, country == country_list[i])
+  
+  HM_far <- sapply(57:73, function(x){
+    state_HM <- FluNet_HM_temp$epidemic
+    alarm_HM <- HM_temp[, x]
+    far_HM <- sum(alarm_HM[state_HM == FALSE], na.rm = TRUE) / length(alarm_HM[state_HM == FALSE])
+    return(far_HM)
+  })
+  
+  EIOS_far <- sapply(57:73, function(x){
+    state_EIOS <- FluNet_EIOS_temp$epidemic
+    alarm_EIOS <- EIOS_temp[, x]
+    far_EIOS <- sum(alarm_EIOS[state_EIOS == FALSE], na.rm = TRUE) / length(alarm_EIOS[state_EIOS == FALSE])
+    return(far_EIOS)
+  })
+  
+  HM_far_list[[i]] <- HM_far
+  EIOS_far_list[[i]] <- EIOS_far
+}
+
+HM_false_alarm_rate <- data.frame(matrix(unlist(HM_far_list), ncol = 17, byrow = TRUE))
+names(HM_false_alarm_rate) <- paste("bcp_", seq(0.1, 0.9, 0.05), sep = "")
+HM_false_alarm_rate$country <- country_list
+HM_false_alarm_rate <- select(HM_false_alarm_rate, country, everything())
+
+EIOS_false_alarm_rate <- data.frame(matrix(unlist(EIOS_far_list), ncol = 17, byrow = TRUE))
+names(EIOS_false_alarm_rate) <- paste("bcp_", seq(0.1, 0.9, 0.05), sep = "")
+EIOS_false_alarm_rate$country <- country_list
+EIOS_false_alarm_rate <- select(EIOS_false_alarm_rate, country, everything())
+
+
+### PPV ####
+HM_PPV_list <- vector(mode = "list")
+EIOS_PPV_list <- vector(mode = "list")
+
+for(i in seq_along(country_list)){
+  FluNet_HM_temp <- filter(FluNet_epidemic, Country == country_list[i] &
+                             SDATE %within% interval(min(HM_epidemic$date), max(HM_epidemic$date)))
+  FluNet_EIOS_temp <- filter(FluNet_epidemic, Country == country_list[i] & 
+                               SDATE %within% interval(min(EIOS_epidemic$date), max(EIOS_epidemic$date)))
+  HM_temp <- filter(HM_epidemic, country == country_list[i])
+  EIOS_temp <- filter(EIOS_epidemic, country == country_list[i])
+  
+  HM_ppv <- sapply(57:73, function(x){
+    state_HM <- FluNet_HM_temp$epidemic
+    alarm_HM <- HM_temp[, x]
+    ppv_HM <- sum(alarm_HM[state_HM == FALSE], na.rm = TRUE) / sum(alarm_HM, na.rm = TRUE)
+    return(ppv_HM)
+  })
+  
+  EIOS_ppv <- sapply(57:73, function(x){
+    state_EIOS <- FluNet_EIOS_temp$epidemic
+    alarm_EIOS <- EIOS_temp[, x]
+    ppv_EIOS <- sum(alarm_EIOS[state_EIOS == FALSE], na.rm = TRUE) / sum(alarm_EIOS, na.rm = TRUE)
+    return(ppv_EIOS)
+  })
+  
+  HM_PPV_list[[i]] <- HM_ppv
+  EIOS_PPV_list[[i]] <- EIOS_ppv
+}
+
+HM_PPV <- data.frame(matrix(unlist(HM_PPV_list), ncol = 17, byrow = TRUE))
+names(HM_PPV) <- paste("bcp_", seq(0.1, 0.9, 0.05), sep = "")
+HM_PPV$country <- country_list
+HM_PPV <- select(HM_PPV, country, everything())
+
+EIOS_PPV <- data.frame(matrix(unlist(EIOS_PPV_list), ncol = 17, byrow = TRUE))
+names(EIOS_PPV) <- paste("bcp_", seq(0.1, 0.9, 0.05), sep = "")
+EIOS_PPV$country <- country_list
+EIOS_PPV <- select(EIOS_PPV, country, everything())
+
+
+
+### timeliness #### 
+HM_timeliness_list <- vector(mode = "list")
+for(i in seq_along(country_list)){
+  prevented_list <- vector(mode = "list")
+  FluNet_HM_temp <- filter(FluNet_epidemic, Country == country_list[i] &
+                             SDATE %within% interval(min(HM_epidemic$date), max(HM_epidemic$date)))
+  FluNet_HM_temp <- FluNet_HM_temp %>% group_by(Country) %>% mutate(outbreak_period = ((cumsum(!is.na(startend))-1) %/% 2) + 1)
+  
+    
+  for(j in 1:max(FluNet_HM_temp$outbreak_period)){
+    FluNet_HM_temp_ob <- filter(FluNet_HM_temp, outbreak_period == j)
+    HM_temp <- filter(HM_epidemic, country == country_list[i] & 
+                        date %within% interval(min(FluNet_HM_temp_ob$SDATE), max(FluNet_HM_temp_ob$SDATE)))
+    prevented <- 0
+    
+    prevented_list[[j]] <- sapply(57:73, function(x){
+      state <- FluNet_HM_temp_ob$epidemic
+      alarm <- HM_temp[, x]
+      length <- sum(FluNet_HM_temp_ob$epidemic)
+      
+      detect <- ifelse(sum(alarm[state == TRUE], na.rm = TRUE) > 0, TRUE, FALSE)
+      if (detect) {
+        first.alarm <- min(which(alarm[state == TRUE] == TRUE))
+        prevented <- (length - first.alarm) / length
+      }else{
+        prevented <- 0
+      }
+      return(prevented)
+    })
+
+  }
+  
+  timeliness_df <- data.frame(matrix(unlist(prevented_list), nrow = max(FluNet_HM_temp$outbreak_period), byrow = TRUE), 
+                            stringsAsFactors = FALSE)
+  HM_timeliness_list[[i]] <- apply(timeliness_df, 2, mean)
+}  
+
+HM_timeliness <- data.frame(matrix(unlist(HM_timeliness_list), ncol = 17, byrow = TRUE))
+names(HM_timeliness) <- paste("bcp_", seq(0.1, 0.9, 0.05), sep = "")
+HM_timeliness$country <- country_list
+HM_timeliness <- select(HM_timeliness, country, everything())
+
+
+EIOS_timeliness_list <- vector(mode = "list")
+for(i in seq_along(country_list)){
+  prevented_list <- vector(mode = "list")
+  FluNet_EIOS_temp <- filter(FluNet_epidemic, Country == country_list[i] &
+                             SDATE %within% interval(min(EIOS_epidemic$date), max(EIOS_epidemic$date)))
+  FluNet_EIOS_temp <- FluNet_EIOS_temp %>% group_by(Country) %>% mutate(outbreak_period = ((cumsum(!is.na(startend))-1) %/% 2) + 1)
+  
+  
+  for(j in 1:max(FluNet_EIOS_temp$outbreak_period)){
+    FluNet_EIOS_temp_ob <- filter(FluNet_EIOS_temp, outbreak_period == j)
+    EIOS_temp <- filter(EIOS_epidemic, country == country_list[i] & 
+                        date %within% interval(min(FluNet_EIOS_temp_ob$SDATE), max(FluNet_EIOS_temp_ob$SDATE)))
+    prevented <- 0
+    
+    prevented_list[[j]] <- sapply(57:73, function(x){
+      state <- FluNet_EIOS_temp_ob$epidemic
+      alarm <- EIOS_temp[, x]
+      length <- sum(FluNet_EIOS_temp_ob$epidemic)
+      
+      detect <- ifelse(sum(alarm[state == TRUE], na.rm = TRUE) > 0, TRUE, FALSE)
+      if (detect) {
+        first.alarm <- min(which(alarm[state == TRUE] == TRUE))
+        prevented <- (length - first.alarm) / length
+      }else{
+        prevented <- 0
+      }
+      return(prevented)
+    })
+    
+  }
+  
+  timeliness_df <- data.frame(matrix(unlist(prevented_list), nrow = max(FluNet_EIOS_temp$outbreak_period), byrow = TRUE), 
+                              stringsAsFactors = FALSE)
+  EIOS_timeliness_list[[i]] <- apply(timeliness_df, 2, mean)
+}  
+
+EIOS_timeliness <- data.frame(matrix(unlist(EIOS_timeliness_list), ncol = 17, byrow = TRUE))
+names(EIOS_timeliness) <- paste("bcp_", seq(0.1, 0.9, 0.05), sep = "")
+EIOS_timeliness$country <- country_list
+EIOS_timeliness <- select(EIOS_timeliness, country, everything())
