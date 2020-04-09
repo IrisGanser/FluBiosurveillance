@@ -488,12 +488,6 @@ HM_epidemic_all_bcp$epidemic[which(is.na(HM_epidemic_all_bcp$epidemic) == TRUE)]
 
 ##### 17 different cutoffs for bcp ##### 
 ### start and end of epidemics in HealthMap
-bcp_start_list <- vector(mode = "list")
-bcp_start <- rep(0, 341)
-for (i in seq_along(country_list)) {
-  HM_temp <- filter(HM_byweek, country == country_list[i] & is.na(HM_byweek$bcp.postprob) == FALSE)
-  bcp_start_list$bcp_start[i] <- epi_start(HM_temp, cutoff = 0.35)
-}
 
 start_col <- paste("bcp_start", seq(0.1, 0.9, 0.05), sep = "")
 end_col <- paste("bcp_end", seq(0.1, 0.9, 0.05), sep = "")
@@ -541,15 +535,15 @@ HM_byweek <- cbind(HM_byweek, setNames(lapply(start_end_col, function(x) x=NA), 
 HM_byweek[40:56] <- data.frame(matrix(unlist(start_end_list), nrow = 8184, byrow = FALSE), stringsAsFactors = FALSE)
 
 # for spikes: if 'start' is not followed by an 'end' within 30 weeks, add an 'end' directly after - this period should be optimized
-for(i in 1:nrow(HM_byweek)){
-  if(HM_byweek$date[i] < "2019-09-01"){
-    if(is.na(HM_byweek[i, 40:56]) == FALSE){
-      if(HM_byweek[i, 40:56] == "start" & sum(HM_byweek[((i+1):(i+30)), 40:56] == "end", na.rm = TRUE) == 0){
-        HM_byweek[(i+1), 40:56] <- "end"
-      }
-    }
-  }
-}
+# for(i in 1:nrow(HM_byweek)){
+#   if(HM_byweek$date[i] < "2019-09-01"){
+#     if(is.na(HM_byweek[i, 40:56]) == FALSE){
+#       if(HM_byweek[i, 40:56] == "start" & sum(HM_byweek[((i+1):(i+30)), 40:56] == "end", na.rm = TRUE) == 0){
+#         HM_byweek[(i+1), 40:56] <- "end"
+#       }
+#     }
+#   }
+# }
 
 
 # epidemic indicator
@@ -586,12 +580,12 @@ HM_byweek <- HM_byweek %>%
   select(-grp)
 HM_byweek <- HM_byweek %>% 
   group_by(country, grp = cumsum(!is.na(start_end0.25))) %>%
-  mutate(epidemic0.25 = replace(start_end0.1, first(start_end0.25) == 'start', TRUE)) %>% 
+  mutate(epidemic0.25 = replace(start_end0.25, first(start_end0.25) == 'start', TRUE)) %>% 
   ungroup() %>% 
   select(-grp)
 HM_byweek <- HM_byweek %>% 
   group_by(country, grp = cumsum(!is.na(start_end0.3))) %>%
-  mutate(epidemic0.3 = replace(start_end0.1, first(start_end0.3) == 'start', TRUE)) %>% 
+  mutate(epidemic0.3 = replace(start_end0.3, first(start_end0.3) == 'start', TRUE)) %>% 
   ungroup() %>% 
   select(-grp)
 HM_byweek <- HM_byweek %>% 
@@ -602,11 +596,6 @@ HM_byweek <- HM_byweek %>%
 HM_byweek <- HM_byweek %>% 
   group_by(country, grp = cumsum(!is.na(start_end0.4))) %>%
   mutate(epidemic0.4 = replace(start_end0.4, first(start_end0.4) == 'start', TRUE)) %>% 
-  ungroup() %>% 
-  select(-grp)
-HM_byweek <- HM_byweek %>% 
-  group_by(country, grp = cumsum(!is.na(start_end0.1))) %>%
-  mutate(epidemic0.1 = replace(start_end0.1, first(start_end0.1) == 'start', TRUE)) %>% 
   ungroup() %>% 
   select(-grp)
 HM_byweek <- HM_byweek %>% 

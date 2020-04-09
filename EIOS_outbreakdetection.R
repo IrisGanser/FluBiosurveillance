@@ -288,3 +288,281 @@ for (i in seq_along(country_list)) {
 
 # write data in file
 #write.csv(EIOS_epidemic, file = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/EIOS_epidemic.csv")
+
+
+##### apply bcp to every country and set 'epidemic' indicator ##### 
+# apply bcp algorithm
+for (i in seq_along(country_list)) { 
+  EIOS_temp <- filter(EIOS_byweek, country == country_list[i])
+  
+  bcp_temp <- bcp(EIOS_temp$counts, burnin = 100, mcmc = 5000)
+  EIOS_byweek$bcp.postprob[EIOS_byweek$country == country_list[i]] <- bcp_temp$posterior.prob
+}
+
+# apply criteria for start of epidemics
+EIOS_byweek$bcp_start <- NA
+for (i in seq_along(country_list)) {
+  EIOS_temp <- filter(EIOS_byweek, country == country_list[i] & is.na(EIOS_byweek$bcp.postprob) == FALSE)
+  
+  for(j in 2:13){ # first few rows without looking back for previous outbreak
+    if(EIOS_temp$bcp.postprob[j] >= 0.5 & EIOS_temp$bcp.postprob[j-1] < 0.5 &
+       EIOS_temp$count_smooth[j] > EIOS_temp$count_smooth[j-1]){
+      EIOS_temp$bcp_start[j] <- EIOS_temp$date[j]
+    } else {
+      EIOS_temp$bcp_start[j] <- NA
+    }
+  }
+  for(j in 10:nrow(EIOS_temp)){
+    if(EIOS_temp$bcp.postprob[j] >= 0.5 & EIOS_temp$bcp.postprob[(j-1)] < 0.5 & # transition from non-epidemic to epidemic
+       EIOS_temp$count_smooth[j] > EIOS_temp$count_smooth[j-1] & # running mean to ensure that curve is rising (beware of spikes!)
+       sum(!is.na(EIOS_temp$bcp_start[(j-10):(j-1)])) == 0){ # No outbreak flagged during the previous 10 weeks
+      EIOS_temp$bcp_start[j] <- EIOS_temp$date[j]
+    } else {
+      EIOS_temp$bcp_start[j] <- NA
+    }
+  }
+  EIOS_byweek$bcp_start[EIOS_byweek$country==country_list[i]] <- EIOS_temp$bcp_start
+}
+
+
+#  apply criteria for end of epidemics
+EIOS_byweek$bcp_end <- NA
+for (i in seq_along(country_list)) { 
+  EIOS_temp <- filter(EIOS_byweek, country == country_list[i] & is.na(EIOS_byweek$bcp.postprob) == FALSE)
+  
+  for(j in (nrow(EIOS_temp)-2):2){# run in reverse because otherwise, third criterion cannot be recognized
+    if(EIOS_temp$bcp.postprob[j-1] >= 0.5 & EIOS_temp$bcp.postprob[j] < 0.5 & # transition from non-epidemic to epidemic
+       EIOS_temp$count_smooth[j] > EIOS_temp$count_smooth[j+1] & # running mean to ensure that curve is rising (beware of spikes!)
+       sum(!is.na(EIOS_temp$bcp_end[(j+1):(j+15)])) == 0){ # No outbreak flagged during the previous 15 weeks
+      EIOS_temp$bcp_end[j] <- EIOS_temp$date[j]
+    } else {
+      EIOS_temp$bcp_end[j] <- NA
+    }
+  }
+  EIOS_byweek$bcp_end[EIOS_byweek$country==country_list[i]] <- EIOS_temp$bcp_end
+}
+
+# start and end indicators of epidemics
+EIOS_byweek$startend_bcp <- ifelse(is.na(EIOS_byweek$bcp_start) == FALSE, "start", 
+                                   ifelse(is.na(EIOS_byweek$bcp_end) == FALSE, "end", NA))
+
+#for spikes: if 'start' is not followed by an 'end' within 30 weeks, add an 'end' directly after - this period should be optimized
+for(i in 1:nrow(EIOS_byweek)){
+  if(EIOS_byweek$date[i] < "2019-09-01"){
+    if(is.na(EIOS_byweek$startend_bcp[i]) == FALSE){
+      if(EIOS_byweek$startend_bcp[i] == "start" & sum(EIOS_byweek$startend_bcp[(i+1):(i+30)] == "end", na.rm = TRUE) == 0){
+        EIOS_byweek$startend_bcp[i+1] <- "end"
+      }
+    }
+  }
+}
+
+# manually insert one 'start' in Iranw hich was omitted by the algorithm because of smoothing
+which(EIOS_byweek$country == "Iran" & EIOS_byweek$startend_bcp == "end")
+EIOS_byweek$startend_bcp[1373] <- "start"
+
+# repeat date copying into bcp_start and bcp_end columns to correct for inserted 'ends' (and manually curated values)
+EIOS_byweek$bcp_end <- ifelse(EIOS_byweek$startend_bcp == "end", EIOS_byweek$date, NA)
+EIOS_byweek$bcp_start <- ifelse(EIOS_byweek$startend_bcp == "start", EIOS_byweek$date, NA)
+
+# look at plots
+for (i in seq_along(country_list)) {
+  EIOS_temp <- filter(EIOS_byweek, country == country_list[i])
+  
+  plot <- ggplot(EIOS_temp, aes(x = date, y = counts, col = bcp.postprob)) + 
+    geom_line(size = 0.75) +
+    scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+    labs(x = "", y = "EIOS event counts", 
+         title = paste("EIOS data for", country_list[i], "with start and end of epidemics", sep = " ")) + 
+    geom_vline(xintercept = na.omit(EIOS_temp$bcp_start[EIOS_temp$startend_bcp == "start"]), lty = 2, col = "red") +
+    geom_vline(xintercept = na.omit(EIOS_temp$bcp_end[EIOS_temp$startend_bcp == "end"]), lty = 2, col = "darkgreen")  + 
+    geom_line(aes(y = count_smooth), col = "red")
+  
+  print(plot)
+  #ggsave(plot = plot, file = paste("EIOS smoothing", country_list[i], ".jpeg", sep=' '))
+}
+
+EIOS_byweek$epidemic <- NA
+
+EIOS_epidemic_all_bcp <- EIOS_byweek %>% 
+  group_by(country, grp = cumsum(!is.na(startend_bcp))) %>% 
+  mutate(epidemic = replace(startend_bcp, first(startend_bcp) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp) 
+EIOS_epidemic_all_bcp$epidemic[which(EIOS_epidemic_all_bcp$epidemic == "end")] <- TRUE
+EIOS_epidemic_all_bcp$epidemic[which(is.na(EIOS_epidemic_all_bcp$epidemic) == TRUE)] <- FALSE
+
+
+# write data in file
+#write.csv(EIOS_epidemic_all_bcp, file = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/EIOS_epidemic_all_bcp.csv")
+
+
+
+##### 17 different cutoffs for bcp ##### 
+### start and end of epidemics in EIOS
+start_col <- paste("bcp_start", seq(0.1, 0.9, 0.05), sep = "")
+end_col <- paste("bcp_end", seq(0.1, 0.9, 0.05), sep = "")
+EIOS_byweek <- cbind(EIOS_byweek, setNames(lapply(start_col, function(x) x=NA), start_col))
+EIOS_byweek <- cbind(EIOS_byweek, setNames(lapply(end_col, function(x) x=NA), end_col))
+
+bcp_start_list <- vector(mode = "list")
+bcp_start <- rep(0, 109)
+bcp_end_list <- vector(mode = "list")
+bcp_end <- rep(0, 109)
+
+for (i in seq_along(country_list)) {
+  EIOS_temp <- filter(EIOS_byweek, country == country_list[i] & is.na(EIOS_byweek$bcp.postprob) == FALSE)
+  
+  # start of epidemics
+  bcp_start_list <- lapply(seq(0.1, 0.9, 0.05), function(x) epi_start(EIOS_temp, cutoff = x))
+  bcp_start_df <- data.frame(matrix(unlist(bcp_start_list), nrow = 109, byrow = FALSE))
+  names(bcp_start_df) <- paste("bcp_start", seq(0.1, 0.9, 0.05), sep = "")
+  
+  EIOS_byweek[EIOS_byweek$country == country_list[i], 6:22] <- bcp_start_df
+  
+  # end of epidemics
+  bcp_end_list <- lapply(seq(0.1, 0.9, 0.05), function(x) epi_end(EIOS_temp, cutoff = x))
+  bcp_end_df <- data.frame(matrix(unlist(bcp_end_list), nrow = 109, byrow = FALSE))
+  names(bcp_end_df) <- paste("bcp_end", seq(0.1, 0.9, 0.05), sep = "")
+  
+  EIOS_byweek[EIOS_byweek$country == country_list[i], 23:39] <- bcp_end_df
+}
+
+# replace all 0 with NA
+EIOS_byweek[6:39] <- sapply(EIOS_byweek[6:39], na_if, 0)
+
+# start end indicator column
+patterns <- c("0.1$", "0.15", "0.2$", "0.25", "0.3$", "0.35", "0.4$", "0.45", "0.5$", "0.55", "0.6$", "0.65", "0.7$", "0.75",
+              "0.8$", "0.85", "0.9$")
+start_end_list <- vector(mode = "list")
+for(pattern in patterns){
+  EIOS_temp <- EIOS_byweek[, grep(names(EIOS_byweek), pattern = pattern)]
+  start_end_list[[pattern]] <- ifelse(is.na(EIOS_temp[1]) == FALSE, "start", 
+                                      ifelse(is.na(EIOS_temp[2]) == FALSE, "end", NA))
+}
+
+start_end_col <- paste("start_end", seq(0.1, 0.9, 0.05), sep = "")
+EIOS_byweek <- cbind(EIOS_byweek, setNames(lapply(start_end_col, function(x) x=NA), start_end_col))
+EIOS_byweek[40:56] <- data.frame(matrix(unlist(start_end_list), nrow = 2616, byrow = FALSE), stringsAsFactors = FALSE)
+
+# for spikes: if 'start' is not followed by an 'end' within 30 weeks, add an 'end' directly after - this period should be optimized
+# for(i in 1:nrow(EIOS_byweek)){
+#   if(EIOS_byweek$date[i] < "2019-09-01"){
+#     if(is.na(EIOS_byweek[i, 40:56]) == FALSE){
+#       if(EIOS_byweek[i, 40:56] == "start" & sum(EIOS_byweek[((i+1):(i+30)), 40:56] == "end", na.rm = TRUE) == 0){
+#         EIOS_byweek[(i+1), 40:56] <- "end"
+#       }
+#     }
+#   }
+# }
+
+
+# epidemic indicator
+
+# somehow I can't get this code to work
+# for(j in names(HM_byweek)[40:56]){
+#   HM_temp <- HM_byweek[, c("country", j)]
+#   HM_temp <- HM_temp %>% 
+#     group_by(country, grp = cumsum(!is.na(HM_temp[2]))) %>%
+#     mutate(epidemic = replace(HM_temp$j, first(HM_temp$j) == 'start', TRUE))
+# 
+#   HM$epidemic <- ifelse(!is.na(HM_temp[j]) & first(HM_temp[j]) == 'start', replace(HM_temp[j], first(HM_temp[j]) == 'start', TRUE), FALSE)
+#   %>%
+#     ungroup() %>%
+#     select(-grp)
+# 
+# }
+
+
+EIOS_byweek <- EIOS_byweek %>% 
+  group_by(country, grp = cumsum(!is.na(start_end0.1))) %>%
+  mutate(epidemic0.1 = replace(start_end0.1, first(start_end0.1) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp)
+EIOS_byweek <- EIOS_byweek %>% 
+  group_by(country, grp = cumsum(!is.na(start_end0.15))) %>%
+  mutate(epidemic0.15 = replace(start_end0.15, first(start_end0.15) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp)
+EIOS_byweek <- EIOS_byweek %>% 
+  group_by(country, grp = cumsum(!is.na(start_end0.2))) %>%
+  mutate(epidemic0.2 = replace(start_end0.2, first(start_end0.2) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp)
+EIOS_byweek <- EIOS_byweek %>% 
+  group_by(country, grp = cumsum(!is.na(start_end0.25))) %>%
+  mutate(epidemic0.25 = replace(start_end0.25, first(start_end0.25) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp)
+EIOS_byweek <- EIOS_byweek %>% 
+  group_by(country, grp = cumsum(!is.na(start_end0.3))) %>%
+  mutate(epidemic0.3 = replace(start_end0.3, first(start_end0.3) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp)
+EIOS_byweek <- EIOS_byweek %>% 
+  group_by(country, grp = cumsum(!is.na(start_end0.35))) %>%
+  mutate(epidemic0.35 = replace(start_end0.35, first(start_end0.35) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp)
+EIOS_byweek <- EIOS_byweek %>% 
+  group_by(country, grp = cumsum(!is.na(start_end0.4))) %>%
+  mutate(epidemic0.4 = replace(start_end0.4, first(start_end0.4) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp)
+EIOS_byweek <- EIOS_byweek %>% 
+  group_by(country, grp = cumsum(!is.na(start_end0.45))) %>%
+  mutate(epidemic0.45 = replace(start_end0.45, first(start_end0.45) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp)
+EIOS_byweek <- EIOS_byweek %>% 
+  group_by(country, grp = cumsum(!is.na(start_end0.5))) %>%
+  mutate(epidemic0.5 = replace(start_end0.5, first(start_end0.5) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp)
+EIOS_byweek <- EIOS_byweek %>% 
+  group_by(country, grp = cumsum(!is.na(start_end0.55))) %>%
+  mutate(epidemic0.55 = replace(start_end0.55, first(start_end0.55) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp)
+EIOS_byweek <- EIOS_byweek %>% 
+  group_by(country, grp = cumsum(!is.na(start_end0.65))) %>%
+  mutate(epidemic0.65 = replace(start_end0.65, first(start_end0.65) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp)
+EIOS_byweek <- EIOS_byweek %>% 
+  group_by(country, grp = cumsum(!is.na(start_end0.6))) %>%
+  mutate(epidemic0.6 = replace(start_end0.6, first(start_end0.6) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp)
+EIOS_byweek <- EIOS_byweek %>% 
+  group_by(country, grp = cumsum(!is.na(start_end0.7))) %>%
+  mutate(epidemic0.7 = replace(start_end0.7, first(start_end0.7) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp)
+EIOS_byweek <- EIOS_byweek %>% 
+  group_by(country, grp = cumsum(!is.na(start_end0.75))) %>%
+  mutate(epidemic0.75 = replace(start_end0.75, first(start_end0.75) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp)
+EIOS_byweek <- EIOS_byweek %>% 
+  group_by(country, grp = cumsum(!is.na(start_end0.8))) %>%
+  mutate(epidemic0.8 = replace(start_end0.8, first(start_end0.8) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp)
+EIOS_byweek <- EIOS_byweek %>% 
+  group_by(country, grp = cumsum(!is.na(start_end0.85))) %>%
+  mutate(epidemic0.85 = replace(start_end0.85, first(start_end0.85) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp)
+EIOS_byweek <- EIOS_byweek %>% 
+  group_by(country, grp = cumsum(!is.na(start_end0.9))) %>%
+  mutate(epidemic0.9 = replace(start_end0.9, first(start_end0.9) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp)
+
+
+EIOS_byweek<- EIOS_byweek %>% mutate_at(vars(57:73), ~replace(., is.na(.), FALSE))
+EIOS_byweek<- EIOS_byweek %>% mutate_at(vars(57:73), ~replace(., . == "end", TRUE))
+
+
+write.csv(EIOS_byweek, file = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/EIOS_epidemic_ROC.csv")
