@@ -124,11 +124,12 @@ HM_total <- HM_byweek %>% group_by(country) %>% summarize(total = sum(counts), m
 ggplot(HM_total, aes(x = country, y = total)) + 
   geom_col(fill = "darkorange3") + 
   geom_text(aes(y = -250, label=total)) + 
-  labs(title = "Total number of HealthMap events from January 2013 - July 2019", x = "") + 
+  labs(title = "Total number of HealthMap events from January 2013 - July 2019", x = "", y = "total counts") + 
   coord_flip() +
   scale_x_discrete(limits = rev(levels(dataHM$country))) + 
-  scale_y_continuous(limits = c(-250, 9300)) + 
-  geom_hline(yintercept = quantile(HM_total$total, probs = c(0.5, 0.75)), lty = 2, col = "red")
+  scale_y_continuous(limits = c(-250, 9300)) 
+  #geom_hline(yintercept = quantile(HM_total$total, probs = c(0.5, 0.75)), lty = 2, col = "red")
+ggsave("HM total counts.jpeg")
 
 ggplot(HM_total, aes(x = country, y = max)) + 
   geom_col(fill = "darkorange3") + 
@@ -144,11 +145,12 @@ EIOS_total <- EIOS_byweek %>% group_by(country) %>% summarize(total = sum(counts
 ggplot(EIOS_total, aes(x = country, y = total)) + 
   geom_col(fill = "darkorange3") + 
   geom_text(aes(label=total, y = -1000)) + 
-  labs(title = "Total number of EIOS events from November 2017 - December 2019", x = "") + 
+  labs(title = "Total number of EIOS events from November 2017 - December 2019", x = "", y = "total counts") + 
   coord_flip() +
   scale_x_discrete(limits = rev(levels(dataHM$country))) + 
-  scale_y_continuous(limits = c(-1000, 28000)) +
-  geom_hline(yintercept = quantile(EIOS_total$total, probs = c(0.5, 0.75)), lty = 2, col = "red")
+  scale_y_continuous(limits = c(-1000, 28000)) 
+  #geom_hline(yintercept = quantile(EIOS_total$total, probs = c(0.5, 0.75)), lty = 2, col = "red")
+ggsave("EIOS total counts.jpeg")
 
 ggplot(EIOS_total, aes(x = country, y = max)) + 
   geom_col(fill = "darkorange3") + 
@@ -215,6 +217,8 @@ languages <- c("Spanish", "English", "Portuguese", "Bulgarian", "Chinese", "Span
                "Thai", "English", "English", "Spanish", "Vietnamese")
 indicators$language <- languages
 
+HM_filter_languages <- c("Arabic", "Chinese", "English", "French", "Portuguese", "Russian", "Spanish", "Hindi")
+
 
 indicators$problematic_FluNet <- ifelse(indicators$country %in% c("Nigeria", "Thailand", "Vietnam"), TRUE, FALSE)
 
@@ -252,5 +256,7 @@ total_internet_users <- total_internet_users %>% select(Country, X2017) %>% filt
 
 indicators <- cbind(indicators, HDI$HDI.2018, latlon$latitude, latlon$longitude, press_freedom$PFI.2018, total_internet_users$TIU.2017)
 names(indicators)[19:23] <- c("HDI.2018", "latitude", "longitude", "PFI.2018", "TIU.2017")
+
+indicators$HM_filter_lang <- ifelse(indicators$language %in% HM_filter_languages, TRUE, FALSE)
 
 write.csv(indicators, file = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/country_indicators.csv")
