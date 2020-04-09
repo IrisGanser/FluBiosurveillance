@@ -3,6 +3,8 @@ library(lubridate)
 library(dplyr)
 library(tidyr)
 library(RColorBrewer)
+library(ggrepel)
+library(ROCR)
 
 # load epidemic datasets with outbreak indicators
 FluNet_epidemic <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/FluNet_epidemic.csv")
@@ -55,7 +57,7 @@ for(i in seq_along(country_list)){
     
     detected_list[[j]] <- sapply(57:73, function(x){
       state <- FluNet_HM_temp_ob$epidemic
-      alarm <- HM_temp[x]
+      alarm <- HM_temp[, x]
       return(sum(state[alarm == TRUE], na.rm = TRUE) > 0)
     })
   } 
@@ -89,7 +91,7 @@ for(i in seq_along(country_list)){
     
     detected_list[[j]] <- sapply(57:73, function(x){
       state <- FluNet_EIOS_temp_ob$epidemic
-      alarm <- EIOS_temp[x]
+      alarm <- EIOS_temp[, x]
       return(sum(state[alarm == TRUE], na.rm = TRUE) > 0)
     })
   } 
@@ -314,3 +316,70 @@ EIOS_timeliness <- data.frame(matrix(unlist(EIOS_timeliness_list), ncol = 17, by
 names(EIOS_timeliness) <- paste("bcp_", seq(0.1, 0.9, 0.05), sep = "")
 EIOS_timeliness$country <- country_list
 EIOS_timeliness <- select(EIOS_timeliness, country, everything())
+
+
+#### combine all metrics into one df ####
+metrics_df_HM <- rbind(HM_false_alarm_rate, HM_PPV, HM_sens_outbreak, HM_sens_week, HM_timeliness)
+metrics_df_HM$metric <- rep(c("FAR", "PPV", "sens_outbreak", "sens_week", "frac_prevented"), each = 24)
+metrics_df_HM_long <- pivot_longer(metrics_df_HM, cols = 2:18, names_to = "cutoff", values_to = "value")
+metrics_df_HM_wide <- pivot_wider(metrics_df_HM_long, names_from = "metric", values_from = "value")
+metrics_df_HM_wide <- metrics_df_HM_wide %>% mutate(cutoff = gsub("bcp_", "", cutoff))
+
+metrics_df_EIOS <- rbind(EIOS_false_alarm_rate, EIOS_PPV, EIOS_sens_outbreak, EIOS_sens_week, EIOS_timeliness)
+metrics_df_EIOS$metric <- rep(c("FAR", "PPV", "sens_outbreak", "sens_week", "frac_prevented"), each = 24)
+metrics_df_EIOS_long <- pivot_longer(metrics_df_EIOS, cols = 2:18, names_to = "cutoff", values_to = "value")
+metrics_df_EIOS_wide <- pivot_wider(metrics_df_EIOS_long, names_from = "metric", values_from = "value")
+metrics_df_EIOS_wide <- metrics_df_EIOS_wide %>% mutate(cutoff = gsub("bcp_", "", cutoff))
+
+
+for(i in seq_along(country_list)){
+  plot <- ggplot(filter(metrics_df_EIOS_wide, country == country_list[i]), aes(x = FAR, y = sens_week)) + 
+    geom_point(size = 3, shape = 19) + 
+    labs(title = paste("EIOS ROC curve for", country_list[i]), x = "false alarm rate", y = "sensitivity per week") + 
+    scale_y_continuous(limits = c(-0.01, 1)) + 
+    scale_x_continuous(limits = c(-0.01, 1)) + 
+    geom_text_repel(aes(label = cutoff))
+  print(plot)
+  ggsave(plot = plot, file = paste("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/EIOS ROC", 
+                                   country_list[i], ".jpeg", sep=' '))
+}
+
+for(i in seq_along(country_list)){
+  plot <- ggplot(filter(metrics_df_HM_wide, country == country_list[i]), aes(x = FAR, y = sens_week)) + 
+    geom_point(size = 3, shape = 19) + 
+    labs(title = paste("HealthMap ROC curve for", country_list[i]), x = "false alarm rate", y = "sensitivity per week") + 
+    scale_y_continuous(limits = c(-0.01, 1)) + 
+    scale_x_continuous(limits = c(-0.01, 1)) + 
+    geom_text_repel(aes(label = cutoff))
+  print(plot)
+  ggsave(plot = plot, file = paste("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/HM ROC", 
+                                   country_list[i], ".jpeg", sep=' '))
+}
+
+# AMOC 
+for(i in seq_along(country_list)){
+  plot <- ggplot(filter(metrics_df_EIOS_wide, country == country_list[i]), aes(x = FAR, y = frac_prevented)) + 
+    geom_point(size = 3, shape = 19) + 
+    labs(title = paste("EIOS AMOC curve for", country_list[i]), x = "false alarm rate", y = "prevented fraction") + 
+    scale_y_continuous(limits = c(0, 1)) + 
+    scale_x_continuous(limits = c(0, 1)) + 
+    geom_text_repel(aes(label = cutoff))
+  print(plot)
+  ggsave(plot = plot, file = paste("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/EIOS AMOC",
+                                   country_list[i], ".jpeg", sep=' '))
+}
+
+for(i in seq_along(country_list)){
+  plot <- ggplot(filter(metrics_df_HM_wide, country == country_list[i]), aes(x = FAR, y = frac_prevented)) + 
+    geom_point(size = 3, shape = 19) + 
+    labs(title = paste("HealthMap ROC curve for", country_list[i]), x = "false alarm rate", y = "prevented fraction") + 
+    scale_y_continuous(limits = c(-0, 1)) + 
+    scale_x_continuous(limits = c(-0, 1)) + 
+    geom_text_repel(aes(label = cutoff))
+  print(plot)
+  ggsave(plot = plot, file = paste("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/HM AMOC",
+                                   country_list[i], ".jpeg", sep=' '))
+}
+
+
+
