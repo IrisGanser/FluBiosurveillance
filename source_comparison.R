@@ -7,9 +7,9 @@ library(RColorBrewer)
 # load epidemic datasets with outbreak indicators
 FluNet_epidemic <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/FluNet_epidemic.csv")
 FluNet_epidemic$SDATE <- as.POSIXct(FluNet_epidemic$SDATE)
-HM_epidemic <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/HealthMap_epidemic.csv")
+HM_epidemic <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/HealthMap_epidemic_all_bcp.csv")
 HM_epidemic$date <- as.POSIXct(HM_epidemic$date)
-EIOS_epidemic <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/EIOS_epidemic.csv")
+EIOS_epidemic <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/EIOS_epidemic_all_bcp.csv")
 EIOS_epidemic$date <- as.POSIXct(EIOS_epidemic$date)
 
 country_list <- levels(FluNet_epidemic$Country)
@@ -51,6 +51,58 @@ sa <- which(FluNet_epidemic$Country == "Saudi Arabia")
 FluNet_epidemic$startend[sa[1]] <- NA
 
 
+# new epidemic plots for all countries
+for (i in seq_along(country_list)) {
+  HM_temp <- filter(HM_epidemic, country == country_list[i])
+  
+  plot <- ggplot(HM_temp, aes(x = date, y = counts, col = epidemic)) + 
+    geom_line(aes(group = 1), size = 0.75) +
+    scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+    labs(x = "", y = "HealthMap event counts", 
+         title = paste("HealthMap data for", country_list[i], "with start and end of epidemics", sep = " ")) + 
+    geom_vline(xintercept = na.omit(HM_temp$bcp_start[HM_temp$startend_bcp == "start"]), lty = 2, col = "red") +
+    geom_vline(xintercept = na.omit(HM_temp$bcp_end[HM_temp$startend_bcp == "end"]), lty = 2, col = "darkgreen")  + 
+    scale_color_manual(values = c("#6e6868", "#e64040"))
+  
+  print(plot)
+  ggsave(plot = plot, file = paste("HealthMap outbreak", country_list[i], ".jpeg", sep=' '))
+}
+
+
+for (i in seq_along(country_list)) {
+  EIOS_temp <- filter(EIOS_epidemic, country == country_list[i])
+  
+  plot <- ggplot(EIOS_temp, aes(x = date, y = counts, col = epidemic)) + 
+    geom_line(aes(group = 1), size = 0.75) +
+    scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+    labs(x = "", y = "EIOS event counts", 
+         title = paste("EIOS data for", country_list[i], "with start and end of epidemics", sep = " ")) + 
+    geom_vline(xintercept = na.omit(EIOS_temp$bcp_start[EIOS_temp$startend_bcp == "start"]), lty = 2, col = "red") +
+    geom_vline(xintercept = na.omit(EIOS_temp$bcp_end[EIOS_temp$startend_bcp == "end"]), lty = 2, col = "darkgreen") + 
+    scale_color_manual(values = c("#6e6868", "#e64040"))
+  
+  print(plot)
+  ggsave(plot = plot, file = paste("EIOS outbreak", country_list[i], ".jpeg", sep=' '))
+}
+
+
+for (i in seq_along(country_list)) {
+  FluNet_temp <- filter(FluNet_epidemic, FluNet_epidemic$Country==country_list[i])
+  
+  plot <- ggplot(FluNet_temp, aes(x = SDATE, y = ALL_INF, col = epidemic)) +
+    geom_line(aes(group = 1), size = 0.75) +
+    scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") +
+    labs(x = "", y = "influenza case counts",
+         title = paste("WHO FluNet data for", country_list[i], "with epidemics", sep = " ")) +
+    geom_vline(xintercept = na.omit(FluNet_temp$bcp_start[FluNet_temp$startend == "start"]), lty = 2, col = "red") +
+    geom_vline(xintercept = na.omit(FluNet_temp$bcp_end[FluNet_temp$startend == "end"]), lty = 2, col = "darkgreen") + 
+    scale_color_manual(values = c("#6e6868", "#e64040"))
+  
+  print(plot)
+  ggsave(plot = plot, file = paste("FluNet outbreak", country_list[i], ".jpeg", sep=' '))
+}
+
+
 # outbreak periods (from one start to next start)
 HM_epidemic <- HM_epidemic %>% group_by(country) %>% mutate(outbreak_period = ((cumsum(!is.na(startend))-1) %/% 2) + 1)
 EIOS_epidemic <- EIOS_epidemic %>% group_by(country) %>% mutate(outbreak_period = ((cumsum(!is.na(startend))-1) %/% 2) + 1)
@@ -73,6 +125,13 @@ EIOS_outbreak_length <- EIOS_epidemic %>% filter(epidemic == TRUE) %>% group_by(
   summarize(length = n(), start_date = min(date), end_date = max(date), height = max(counts)) %>% 
   mutate(outbreak_no = row_number()) %>% select(-grp)
 EIOS_outbreak_length$outbreak_interval <- interval(EIOS_outbreak_length$start_date, EIOS_outbreak_length$end_date)
+
+
+FluNet_outbreaks_for_HM <- filter(FluNet_outbreak_length, start_date %within% interval(min(HM_epidemic$date), max(HM_epidemic$date))) %>% 
+  group_by(Country) %>% summarize(no_FluNet_for_HM = n())
+
+FluNet_outbreaks_for_EIOS <- filter(FluNet_outbreak_length, start_date %within% interval(min(EIOS_epidemic$date), max(EIOS_epidemic$date))) %>% 
+  group_by(Country) %>% summarize(no_FluNet_for_EIOS = n())
 
 
 
@@ -105,12 +164,6 @@ for(i in seq_along(country_list)){
   outbreaks_detected$no_EIOS[i] <- no_detected_outbreaks_EIOS
 }
 
-
-FluNet_outbreaks_for_HM <- filter(FluNet_outbreak_length, start_date %within% interval(min(HM_epidemic$date), max(HM_epidemic$date))) %>% 
-  group_by(Country) %>% summarize(no_FluNet_for_HM = n())
-
-FluNet_outbreaks_for_EIOS <- filter(FluNet_outbreak_length, start_date %within% interval(min(EIOS_epidemic$date), max(EIOS_epidemic$date))) %>% 
-  group_by(Country) %>% summarize(no_FluNet_for_EIOS = n())
 
 
 sens_per_outbreak <- data.frame(outbreaks_detected$country, FluNet_outbreaks_for_HM$no_FluNet_for_HM, outbreaks_detected$no_HM,
@@ -178,9 +231,9 @@ ggplot(sens_per_week_long, aes(x = country, y = sensitivity_per_week * 100, fill
   scale_x_discrete(limits = rev(levels(sens_per_week_long$country))) +
   scale_y_continuous(limits = c(0, 100)) + 
   scale_fill_brewer(palette = "Set1")
-#ggsave(filename = "all_countries_sens_per_week.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic")
+ggsave(filename = "all_countries_sens_per_week.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic")
 
-##### calculate exact sensitivity (+/- one week) #####
+##### calculate exact sensitivity (+/- two weeks) #####
 detected_exact <- vector(mode = "list")
 for(i in seq_along(country_list)){
   FluNet_EIOS_temp_ol <- filter(FluNet_outbreak_length, Country == country_list[i] & 
@@ -193,14 +246,14 @@ for(i in seq_along(country_list)){
   sum_HM <- NA
   for(j in 1:nrow(HM_temp_ol)){
     sum_HM[j] <- sum(HM_temp_ol$start_date[j] %within%
-                                  interval(FluNet_HM_temp_ol$start_date - weeks(1), FluNet_HM_temp_ol$start_date + weeks(1)),
+                                  interval(FluNet_HM_temp_ol$start_date - weeks(2), FluNet_HM_temp_ol$start_date + weeks(2)),
                      na.rm = TRUE)
     no_detected_outbreaks_HM <- sum(sum_HM)
   }
   sum_EIOS <- NA
   for(k in 1:nrow(EIOS_temp_ol)){
     sum_EIOS[k] <- sum(EIOS_temp_ol$start_date[k]  %within%
-                                    interval(FluNet_EIOS_temp_ol$start_date[k] - weeks(1), FluNet_EIOS_temp_ol$start_date[k] + weeks(1)),
+                                    interval(FluNet_EIOS_temp_ol$start_date[k] - weeks(2), FluNet_EIOS_temp_ol$start_date[k] + weeks(2)),
                        na.rm = TRUE)
     no_detected_outbreaks_EIOS <- sum(sum_EIOS)
   } 
@@ -221,7 +274,7 @@ sens_exact_long$source <- factor(sens_exact_long$source, levels = c("sens_HM", "
 ggplot(sens_exact_long, aes(x = country, y = exact_sensitivity * 100, fill = source)) +
   geom_col(position = "dodge") + 
   coord_flip() + 
-  labs(title = "Exact outbreak sensitivity (detection within +/- one week)", y = "Exact outbreak sensitivity (%)", x = "", 
+  labs(title = "Exact outbreak sensitivity (detection within +/- two weeks)", y = "Exact outbreak sensitivity (%)", x = "", 
        caption = "WHO FluNet data were used as gold standard") +
   scale_x_discrete(limits = rev(levels(sens_exact_long$country))) +
   scale_y_continuous(limits = c(0, 100)) +
@@ -266,6 +319,48 @@ ggplot(PPV_long, aes(x = country, y = PPV, fill = source)) +
   labs(title = "Positive predictive value of HealthMap and EIOS systems", y = "Positive predictive value", x = "", 
        caption = "WHO FluNet data were used as gold standard") +
   scale_x_discrete(limits = rev(levels(PPV_long$country))) +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_fill_brewer(palette = "Set1")
+#ggsave(filename = "all_countries_PPV.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic")
+
+
+
+NPV_list <- vector(mode = "list")
+for(i in seq_along(country_list)){
+  FluNet_EIOS_temp <- filter(FluNet_epidemic, Country == country_list[i] & 
+                               SDATE %within% interval(min(EIOS_epidemic$date), max(EIOS_epidemic$date)))
+  FluNet_HM_temp <- filter(FluNet_epidemic, Country == country_list[i] & 
+                             SDATE %within% interval(min(HM_epidemic$date), max(HM_epidemic$date)))
+  HM_temp <- filter(HM_epidemic, country == country_list[i])
+  EIOS_temp <- filter(EIOS_epidemic, country == country_list[i])
+  
+  state_HM <- FluNet_HM_temp$epidemic
+  alarm_HM <- HM_temp$epidemic
+  TN_HM <- sum(alarm_HM[state_HM == FALSE] == FALSE, na.rm = TRUE)
+  NPV_HM <- TN_HM / sum(alarm_HM, na.rm = FALSE)
+  
+  state_EIOS <- FluNet_EIOS_temp$epidemic
+  alarm_EIOS <- EIOS_temp$epidemic
+  TN_EIOS <- sum(alarm_EIOS[state_EIOS == FALSE] == FALSE, na.rm = TRUE)
+  NPV_EIOS <- TN_EIOS / sum(alarm_EIOS, na.rm = FALSE)
+  
+  NPV_list$country[i] <- country_list[i]
+  NPV_list$NPV_HM[i] <- NPV_HM
+  NPV_list$NPV_EIOS[i] <- NPV_EIOS
+}
+
+NPV <- data.frame(NPV_list$country, NPV_list$NPV_HM, NPV_list$NPV_EIOS)
+names(NPV) <- c("country", "NPV_HM", "NPV_EIOS")
+
+NPV_long <- pivot_longer(NPV, cols = c(NPV_HM, NPV_EIOS), names_to = "source", values_to = "NPV")
+NPV_long$source <- factor(NPV_long$source, levels = c("NPV_HM", "NPV_EIOS"), labels = c("HealthMap", "EIOS"))
+
+ggplot(NPV_long, aes(x = country, y = NPV, fill = source)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "Positive predictive value of HealthMap and EIOS systems", y = "Negative predictive value", x = "", 
+       caption = "WHO FluNet data were used as gold standard") +
+  scale_x_discrete(limits = rev(levels(NPV_long$country))) +
   scale_y_continuous(limits = c(0, 1)) +
   scale_fill_brewer(palette = "Set1")
 #ggsave(filename = "all_countries_PPV.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic")
@@ -482,6 +577,50 @@ ggplot(mean_time_detect_long, aes(x = country, y = mean_time, fill = source)) +
 #ggsave(filename = "all_countries_mean_time.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic")
 
 
+##### accuracy #####
+accuracy_list <- vector(mode = "list")
+for(i in seq_along(country_list)){
+  FluNet_EIOS_temp <- filter(FluNet_epidemic, Country == country_list[i] & 
+                               SDATE %within% interval(min(EIOS_epidemic$date), max(EIOS_epidemic$date)))
+  FluNet_HM_temp <- filter(FluNet_epidemic, Country == country_list[i] & 
+                             SDATE %within% interval(min(HM_epidemic$date), max(HM_epidemic$date)))
+  HM_temp <- filter(HM_epidemic, country == country_list[i])
+  EIOS_temp <- filter(EIOS_epidemic, country == country_list[i])
+  
+  state_HM <- FluNet_HM_temp$epidemic
+  alarm_HM <- HM_temp$epidemic
+  TP_HM <- sum(alarm_HM[state_HM == TRUE], na.rm = TRUE)
+  TN_HM <- sum(alarm_HM[state_HM == FALSE] == FALSE, na.rm = TRUE)
+  accuracy_HM <- (TP_HM + TN_HM)/nrow(HM_temp)
+  
+  state_EIOS <- FluNet_EIOS_temp$epidemic
+  alarm_EIOS <- EIOS_temp$epidemic
+  TP_EIOS <- sum(alarm_EIOS[state_EIOS == TRUE], na.rm = TRUE)
+  TN_EIOS <- sum(alarm_EIOS[state_EIOS == FALSE] == FALSE, na.rm = TRUE)
+  accuracy_EIOS <- (TP_EIOS + TN_EIOS)/nrow(EIOS_temp)
+  
+  accuracy_list$country[i] <- country_list[i]
+  accuracy_list$accuracy_HM[i] <- accuracy_HM
+  accuracy_list$accuracy_EIOS[i] <- accuracy_EIOS
+}
+
+accuracy <- data.frame(accuracy_list$country, accuracy_list$accuracy_HM, accuracy_list$accuracy_EIOS)
+names(accuracy) <- c("country", "accuracy_HM", "accuracy_EIOS")
+
+accuracy_long <- pivot_longer(accuracy, cols = c(accuracy_HM, accuracy_EIOS), 
+                                      names_to = "source", values_to = "accuracy")
+accuracy_long$source <- factor(accuracy_long$source, levels = c("accuracy_HM", "accuracy_EIOS"), 
+                                       labels = c("HealthMap", "EIOS"))
+
+ggplot(accuracy_long, aes(x = country, y = accuracy, fill = source)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "Accuracy of HealthMap and EIOS systems", y = "Accuracy", x = "", 
+       caption = "WHO FluNet data were used as gold standard") +
+  scale_x_discrete(limits = rev(levels(accuracy_long$country))) +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_fill_brewer(palette = "Set1")
+#ggsave(filename = "all_countries_accuracy.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic")
 
 ##### combine all metrics into one dataframe ##### 
 metrics <- data.frame(sens_per_outbreak_long$country, sens_per_outbreak_long$source, sens_per_outbreak_long$sensitivity, 
