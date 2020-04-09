@@ -411,9 +411,15 @@ lm_HM_multi_coef <- lapply(lm_HM_multi_summary, '[[', "coefficients")
 lm_HM_multi_step <- lapply(lapply(lm_HM_multi, step), summary)
 lm_HM_multi_step_coef <- lapply(lm_HM_multi_step, '[[', "coefficients")
 names(lm_HM_multi_step_coef) <- names(metrics_HM)[3:8]
+lm_HM_multi_step_coef
 
 lm_HM_multi_step_R2 <- sapply(lm_HM_multi_step, '[[', "r.squared")
 names(lm_HM_multi_step_R2) <- names(metrics_HM)[3:8]
+lm_HM_multi_step_R2
+
+lm_HM_multi_step_adjR2 <- sapply(lm_HM_multi_step, '[[', "adj.r.squared")
+names(lm_HM_multi_step_adjR2) <- names(metrics_HM)[3:8]
+lm_HM_multi_step_adjR2
 
 
 ### EIOS
@@ -432,3 +438,7 @@ lm_EIOS_multi_step_coef
 lm_EIOS_multi_step_R2 <- sapply(lm_EIOS_multi_step, '[[', "r.squared")
 names(lm_EIOS_multi_step_R2) <- names(metrics_EIOS)[3:8]
 lm_EIOS_multi_step_R2
+
+lm_EIOS_multi_step_adjR2 <- sapply(lm_EIOS_multi_step, '[[', "adj.r.squared")
+names(lm_EIOS_multi_step_adjR2) <- names(metrics_EIOS)[3:8]
+lm_EIOS_multi_step_adjR2
