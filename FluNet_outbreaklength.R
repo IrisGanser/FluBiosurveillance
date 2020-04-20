@@ -31,6 +31,17 @@ FluNet_data$Country <- revalue(FluNet_data$Country, c("Iran (Islamic Republic of
 country_list <- levels(FluNet_data$Country)
 
 
+FluNet_plot <- filter(FluNet_data, Country %in% c("Nigeria", "United States", "Thailand", "Vietnam"))
+FluNet_plot$Country <- factor(FluNet_plot$Country, levels = c("United States", "Nigeria", "Thailand", "Vietnam"))
+ggplot(FluNet_plot, aes(x = SDATE)) + 
+  geom_line(aes(y = ALL_INF, col = "Total influenza")) +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "2 years") + 
+  labs(x = "", y = "influenza case counts", title = "FluNet influenza counts") + 
+  geom_line(aes(y = INF_A, col = "Influenza A")) + 
+  geom_line(aes(y = INF_B, col = "Influenza B")) +
+  scale_color_discrete(name = "") + 
+  facet_wrap(facets = ~Country, scales = "free_y")
+#ggsave(filename = "FluNet counts four countries.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/FluNet")
 
 ### smoothing according to data abundance 
 # all countries with cubic  method looks good visually
@@ -80,7 +91,7 @@ for (i in seq_along(country_list)) {
 for (i in seq_along(country_list)) { 
   FluNet_temp <- filter(FluNet_data, FluNet_data$Country==country_list[i])
   
-  bcp_temp <- bcp(FluNet_temp$ALL_INF, burnin = 100, mcmc = 5000)
+  bcp_temp <- bcp(FluNet_temp$ALL_INF, burnin = 30, mcmc = 500)
   FluNet_data$bcp.postprob[FluNet_data$Country==country_list[i]] <- bcp_temp$posterior.prob
 }
 
@@ -218,7 +229,58 @@ for (i in seq_along(country_list)) {
 }
 
 
-## outbreak detection for Nigeria, Thailand, and Vietnam
+
+FluNet_data$bcp_end <- ifelse(FluNet_data$startend == "end", FluNet_data$SDATE, NA)
+FluNet_data$bcp_start <- ifelse(FluNet_data$startend == "start", FluNet_data$SDATE, NA)
+
+
+## set binary 'epidemic' indicator
+FluNet_data$epidemic <- NA
+FluNet_data <- FluNet_data %>% 
+  group_by(Country, grp = cumsum(!is.na(startend))) %>% 
+  mutate(epidemic = replace(startend, first(startend) == 'start', TRUE)) %>% 
+  ungroup() %>% 
+  select(-grp) 
+FluNet_data$epidemic[which(FluNet_data$epidemic == "end")] <- TRUE
+FluNet_data$epidemic[which(is.na(FluNet_data$epidemic) == TRUE)] <- FALSE
+
+
+
+for (i in seq_along(country_list)) {
+  FluNet_temp <- filter(FluNet_data, FluNet_data$Country==country_list[i] & is.na(FluNet_data$bcp.postprob) == FALSE)
+  plot <- ggplot(FluNet_temp, aes(x = SDATE, y = ALL_INF, col = epidemic)) +
+    geom_line(aes(group = 1), size = 0.75) +
+    scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") +
+    labs(x = "", y = "influenza case counts",
+         title = paste("WHO FluNet data for", country_list[i], "with epidemics", sep = " ")) +
+    geom_vline(xintercept = na.omit(FluNet_temp$bcp_start[FluNet_temp$startend == "start"]), lty = 2, col = "red") +
+    geom_vline(xintercept = na.omit(FluNet_temp$bcp_end[FluNet_temp$startend == "end"]), lty = 2, col = "darkgreen") + 
+    scale_color_manual(values = c("#6e6868", "#e64040"))
+  
+  print(plot)
+  #ggsave(plot = plot, file = paste("FluNet outbreak", country_list[i], ".jpeg", sep=' '))
+}
+
+# complete dataframe with epidemic indicator
+FluNet_epidemic <- FluNet_data %>% select(c("Country", "WHOREGION", "FLUREGION", "Year", "Week", "SDATE",
+                                            "INF_A", "INF_B", "ALL_INF", "ALL_INF2",
+                                            "count_smooth", "bcp.postprob", "bcp_start", "bcp_end", "startend", "epidemic"))
+
+write.csv(FluNet_epidemic, file = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/FluNet_epidemic.csv")
+
+
+
+FluNet_epidemic %>% group_by(Country) %>% summarize(n_outbreak_weeks = sum(epidemic == TRUE), 
+                                                    n_non_outbreak_week = sum(epidemic == FALSE))
+
+outbreak_length <- FluNet_epidemic %>% filter(epidemic == TRUE) %>% group_by(Country, grp = cumsum(!is.na(startend))) %>% 
+  summarize(length = n()) %>% mutate(outbreak_no = row_number()) %>% select(-grp)
+
+
+
+##### deprecated #####
+
+## outbreak detection for Nigeria, Thailand, and Vietnam - don'T do this anymore because of data inconstencies and because cpm does not automatically give better results
 FluNet_Nig <- filter(FluNet_data, Country == "Nigeria")
 FluNet_Tha <- filter(FluNet_data, Country == "Thailand")
 FluNet_Vnm <- filter(FluNet_data, Country == "Vietnam") 
@@ -352,48 +414,3 @@ FluNet_data$startend[FluNet_data$Country == "Thailand"] <- ifelse(is.na(FluNet_T
 FluNet_data$startend[FluNet_data$Country == "Vietnam"] <- ifelse(is.na(FluNet_Vnm$cpm_start) == FALSE, "start", 
                                                                  ifelse(is.na(FluNet_Vnm$cpm_end) == FALSE, "end", NA))
 
-FluNet_data$bcp_end <- ifelse(FluNet_data$startend == "end", FluNet_data$SDATE, NA)
-FluNet_data$bcp_start <- ifelse(FluNet_data$startend == "start", FluNet_data$SDATE, NA)
-
-
-## set binary 'epidemic' indicator
-FluNet_data$epidemic <- NA
-FluNet_data <- FluNet_data %>% 
-  group_by(Country, grp = cumsum(!is.na(startend))) %>% 
-  mutate(epidemic = replace(startend, first(startend) == 'start', TRUE)) %>% 
-  ungroup() %>% 
-  select(-grp) 
-FluNet_data$epidemic[which(FluNet_data$epidemic == "end")] <- TRUE
-FluNet_data$epidemic[which(is.na(FluNet_data$epidemic) == TRUE)] <- FALSE
-
-
-
-for (i in seq_along(country_list)) {
-  FluNet_temp <- filter(FluNet_data, FluNet_data$Country==country_list[i] & is.na(FluNet_data$bcp.postprob) == FALSE)
-  plot <- ggplot(FluNet_temp, aes(x = SDATE, y = ALL_INF, col = epidemic)) +
-    geom_line(aes(group = 1), size = 0.75) +
-    scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") +
-    labs(x = "", y = "influenza case counts",
-         title = paste("WHO FluNet data for", country_list[i], "with epidemics", sep = " ")) +
-    geom_vline(xintercept = na.omit(FluNet_temp$bcp_start[FluNet_temp$startend == "start"]), lty = 2, col = "red") +
-    geom_vline(xintercept = na.omit(FluNet_temp$bcp_end[FluNet_temp$startend == "end"]), lty = 2, col = "darkgreen") + 
-    scale_color_manual(values = c("#6e6868", "#e64040"))
-  
-  print(plot)
-  #ggsave(plot = plot, file = paste("FluNet outbreak", country_list[i], ".jpeg", sep=' '))
-}
-
-# complete dataframe with epidemic indicator
-FluNet_epidemic <- FluNet_data %>% select(c("Country", "WHOREGION", "FLUREGION", "Year", "Week", "SDATE",
-                                            "INF_A", "INF_B", "ALL_INF", "ALL_INF2",
-                                            "count_smooth", "bcp.postprob", "bcp_start", "bcp_end", "startend", "epidemic"))
-
-write.csv(FluNet_epidemic, file = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/FluNet_epidemic.csv")
-
-
-
-FluNet_epidemic %>% group_by(Country) %>% summarize(n_outbreak_weeks = sum(epidemic == TRUE), 
-                                                    n_non_outbreak_week = sum(epidemic == FALSE))
-
-outbreak_length <- FluNet_epidemic %>% filter(epidemic == TRUE) %>% group_by(Country, grp = cumsum(!is.na(startend))) %>% 
-  summarize(length = n()) %>% mutate(outbreak_no = row_number()) %>% select(-grp)
