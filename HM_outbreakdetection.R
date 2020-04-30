@@ -376,7 +376,7 @@ for (i in seq_along(country_list)) {
 for (i in seq_along(country_list)) { 
   HM_temp <- filter(HM_byweek, country == country_list[i])
   
-  bcp_temp <- bcp(HM_temp$counts, burnin = 100, mcmc = 5000)
+  bcp_temp <- bcp(HM_temp$counts, burnin = 100, mcmc = 500)
   HM_byweek$bcp.postprob[HM_byweek$country==country_list[i]] <- bcp_temp$posterior.prob
 }
 
@@ -393,10 +393,10 @@ for (i in seq_along(country_list)) {
       HM_temp$bcp_start[j] <- NA
     }
   }
-  for(j in 10:nrow(HM_temp)){
+  for(j in 12:nrow(HM_temp)){
     if(HM_temp$bcp.postprob[j] >= 0.5 & HM_temp$bcp.postprob[(j-1)] < 0.5 & # transition from non-epidemic to epidemic
        HM_temp$count_smooth[j] > HM_temp$count_smooth[j-1] & # running mean to ensure that curve is rising (beware of spikes!)
-       sum(!is.na(HM_temp$bcp_start[(j-10):(j-1)])) == 0){ # No outbreak flagged during the previous 10 weeks
+       sum(!is.na(HM_temp$bcp_start[(j-12):(j-1)])) == 0){ # No outbreak flagged during the previous 10 weeks
       HM_temp$bcp_start[j] <- HM_temp$date[j]
     } else {
       HM_temp$bcp_start[j] <- NA
@@ -431,7 +431,7 @@ HM_byweek$startend_bcp <- ifelse(is.na(HM_byweek$bcp_start) == FALSE, "start",
 for(i in 1:nrow(HM_byweek)){
   if(HM_byweek$date[i] < "2019-09-01"){
     if(is.na(HM_byweek$startend_bcp[i]) == FALSE){
-      if(HM_byweek$startend_bcp[i] == "start" & sum(HM_byweek$startend_bcp[(i+1):(i+30)] == "end", na.rm = TRUE) == 0){
+      if(HM_byweek$startend_bcp[i] == "start" & !sum(HM_byweek$startend_bcp[(i+1):(i+40)] == "end", na.rm = TRUE) > 0){
         HM_byweek$startend_bcp[i+1] <- "end"
       }
     }
@@ -450,6 +450,9 @@ HM_byweek$startend_bcp[860] <- NA
 # manually remove one 'end' in an epidemic for USA
 which(HM_byweek$country == "United States" & HM_byweek$startend_bcp == "end")
 HM_byweek$startend_bcp[7254] <- NA
+#manually remove one 'end' in an epidemic for Germany
+which(HM_byweek$country == "Germany" & HM_byweek$startend_bcp == "end")
+HM_byweek$startend_bcp[3272] <- NA
 
 # repeat date copying into bcp_start and bcp_end columns to correct for inserted 'ends' (and manually curated values)
 HM_byweek$bcp_end <- ifelse(HM_byweek$startend_bcp == "end", HM_byweek$date, NA)
@@ -483,7 +486,24 @@ HM_epidemic_all_bcp$epidemic[which(HM_epidemic_all_bcp$epidemic == "end")] <- TR
 HM_epidemic_all_bcp$epidemic[which(is.na(HM_epidemic_all_bcp$epidemic) == TRUE)] <- FALSE
 
 # write data in file
-# write.csv(HM_epidemic_all_bcp, file = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/HealthMap_epidemic_all_bcp.csv")
+#write.csv(HM_epidemic_all_bcp, file = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/HealthMap_epidemic_all_bcp.csv")
+
+for (i in seq_along(country_list)) {
+  HM_temp <- filter(HM_epidemic_all_bcp, country == country_list[i])
+  
+  plot <- ggplot(HM_temp, aes(x = date, y = counts, col = epidemic)) + 
+    geom_line(aes(group = 1), size = 0.75) +
+    scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") + 
+    labs(x = "", y = "HealthMap event counts", 
+         title = paste("HealthMap data for", country_list[i], "with start and end of epidemics", sep = " ")) + 
+    geom_vline(xintercept = na.omit(HM_temp$bcp_start[HM_temp$startend_bcp == "start"]), lty = 2, col = "red") +
+    geom_vline(xintercept = na.omit(HM_temp$bcp_end[HM_temp$startend_bcp == "end"]), lty = 2, col = "darkgreen")  + 
+    scale_color_manual(values = c("#6e6868", "#e64040"))
+  
+  print(plot)
+  #ggsave(plot = plot, file = paste("HealthMap outbreak", country_list[i], ".jpeg", sep=' '))
+}
+
 
 
 ##### 17 different cutoffs for bcp ##### 

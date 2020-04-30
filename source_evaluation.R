@@ -6,7 +6,7 @@ library(RColorBrewer)
 library(ggrepel)
 library(gridExtra)
 library(GGally)
-
+library(cowplot)
 
 
 ### load metrics and indicator data
@@ -36,6 +36,99 @@ my_colors <- brewer.pal(7, "Blues")[3:7]
 
 metrics_HM <- filter(met_ind, source == "HealthMap")
 metrics_EIOS <- filter(met_ind, source == "EIOS")
+
+ggplot(met_ind, aes(x = country, y = F1, fill = source)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "F1 measure of HealthMap and EIOS systems", y = "F1 (harmonic mean of sensitivity and PPV)", x = "", 
+       caption = "WHO FluNet data were used as gold standard") +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_x_discrete(limits = rev(levels(met_ind$country))) +
+  scale_fill_brewer(palette = "Set1", limits = rev(levels(met_ind$source))) 
+#ggsave("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/all_countries_F1.jpeg") 
+
+get_legend<-function(myggplot){
+  tmp <- ggplot_gtable(ggplot_build(myggplot))
+  leg <- which(sapply(tmp$grobs, function(x) x$name) == "guide-box")
+  legend <- tmp$grobs[[leg]]
+  return(legend)
+}
+
+p1 <- ggplot(met_ind, aes(x = country, y = sens_per_outbreak, fill = source)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "Sensitivity per outbreak", y = "Sensitivity per outbreak", x = "") +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_x_discrete(limits = rev(levels(met_ind$country))) +
+  scale_fill_brewer(palette = "Set1", limits = rev(levels(met_ind$source)))
+legend <- get_legend(p1)
+
+p1 <- ggplot(met_ind, aes(x = country, y = sens_per_outbreak, fill = source)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "Sensitivity per outbreak", y = "Sensitivity per outbreak", x = "") +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_x_discrete(limits = rev(levels(met_ind$country))) +
+  scale_fill_brewer(palette = "Set1", limits = rev(levels(met_ind$source))) +
+  theme(legend.position = "none")
+
+p2 <- ggplot(met_ind, aes(x = country, y = sens_per_week, fill = source)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "Sensitivity per week", y = "Sensitivity per week", x = "") +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_x_discrete(limits = rev(levels(met_ind$country))) +
+  scale_fill_brewer(palette = "Set1", limits = rev(levels(met_ind$source))) +
+  theme(legend.position = "none") 
+
+p3 <- ggplot(met_ind, aes(x = country, y = sens_exact, fill = source)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "Timely sensitivity (detection within +/- two weeks)", y = "Timely sensitivity", x = "") +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_x_discrete(limits = rev(levels(met_ind$country))) +
+  scale_fill_brewer(palette = "Set1", limits = rev(levels(met_ind$source))) +
+  theme(legend.position = "none") 
+
+p4 <- ggplot(met_ind, aes(x = country, y = specificity, fill = source)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "Specificity", y = "Specificity", x = "") +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_x_discrete(limits = rev(levels(met_ind$country))) +
+  scale_fill_brewer(palette = "Set1", limits = rev(levels(met_ind$source))) +
+  theme(legend.position = "none") 
+
+p5 <- ggplot(met_ind, aes(x = country, y = PPV, fill = source)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "Positive Predictive Value", y = "PPV", x = "") +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_x_discrete(limits = rev(levels(met_ind$country))) +
+  scale_fill_brewer(palette = "Set1", limits = rev(levels(met_ind$source))) +
+  theme(legend.position = "none") 
+
+p6 <- ggplot(met_ind, aes(x = country, y = frac_prevented, fill = source)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "Timeliness (Prevented Fraction)", y = "Prevented fraction", x = "") +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_x_discrete(limits = rev(levels(met_ind$country))) +
+  scale_fill_brewer(palette = "Set1", limits = rev(levels(met_ind$source))) +
+  theme(legend.position = "none") 
+
+blankPlot <- ggplot()+geom_blank(aes(1,1)) + 
+  cowplot::theme_nothing()
+
+grid.arrange(p1, p2, blankPlot, p3, p4, legend, p5, p6, blankPlot, ncol = 3, 
+             top = textGrob("EIOS and HealthMap performance metrics", gp=gpar(fontsize=18, fontface = "bold")), 
+             widths=c(2.5, 2.5, 0.5))
+ggsave(plot = grid.arrange(p1, p2, blankPlot, p3, p4, legend, p5, p6, blankPlot, ncol = 3, 
+                           top = textGrob("EIOS and HealthMap performance metrics", gp=gpar(fontsize=18, fontface = "bold")), 
+                           widths=c(2.5, 2.5, 0.5)),
+       filename = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/performance_metrics_all.jpeg",
+       width = 11.2, height = 10)
+
 
 ##### ROC & AMOC curves #####
 ### HealthMap
