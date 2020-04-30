@@ -5,6 +5,7 @@ library(lubridate)
 library(stringr)
 library(dplyr)
 library(tidyr)
+library(RColorBrewer)
 
 ## load all data
 # load FluNet data
@@ -64,7 +65,7 @@ overseas_territories <- c("Bermuda [UK]", "CollectivitÃ© d'outre-mer de Saint 
 dataHM <- filter(dataHM, !(country %in% overseas_territories | place_name %in% overseas_territories))
 dataHM$country <- factor(dataHM$country)
 
-HM_byweek <- dataHM %>% group_by(date = floor_date(load_date, "week"), country = country, .drop = FALSE) %>%
+HM_byweek <- dataHM %>% group_by(date = floor_date(load_date, "week", week_start = 1), country = country, .drop = FALSE) %>%
   summarize(counts=n()) %>% as.data.frame()
 
 
@@ -94,7 +95,7 @@ EIOSreports$importDate <- gsub("T", " ", EIOSreports$importDate)
 EIOSreports$importDate <- as.POSIXct(EIOSreports$importDate, format="%Y-%m-%d %H:%M:%S")
 
 # summarize into weekly data
-EIOS_byweek <- EIOSreports %>% group_by(date = floor_date(importDate, "week"), country = Country, .drop = FALSE) %>%
+EIOS_byweek <- EIOSreports %>% group_by(date = floor_date(importDate, "week", week_start = 1), country = Country, .drop = FALSE) %>%
   summarize(counts=n()) %>% as.data.frame()
 
 
@@ -129,7 +130,7 @@ ggplot(HM_total, aes(x = country, y = total)) +
   scale_x_discrete(limits = rev(levels(dataHM$country))) + 
   scale_y_continuous(limits = c(-250, 9300)) 
   #geom_hline(yintercept = quantile(HM_total$total, probs = c(0.5, 0.75)), lty = 2, col = "red")
-ggsave("HM total counts.jpeg")
+#ggsave("HM total counts.jpeg")
 
 ggplot(HM_total, aes(x = country, y = max)) + 
   geom_col(fill = "darkorange3") + 
@@ -150,7 +151,7 @@ ggplot(EIOS_total, aes(x = country, y = total)) +
   scale_x_discrete(limits = rev(levels(dataHM$country))) + 
   scale_y_continuous(limits = c(-1000, 28000)) 
   #geom_hline(yintercept = quantile(EIOS_total$total, probs = c(0.5, 0.75)), lty = 2, col = "red")
-ggsave("EIOS total counts.jpeg")
+#ggsave("EIOS total counts.jpeg")
 
 ggplot(EIOS_total, aes(x = country, y = max)) + 
   geom_col(fill = "darkorange3") + 
@@ -161,6 +162,18 @@ ggplot(EIOS_total, aes(x = country, y = max)) +
   scale_x_discrete(limits = rev(levels(dataHM$country))) +
   geom_hline(yintercept = quantile(EIOS_total$max, probs = c(0.5, 0.75)), lty = 2, col = "red")
 
+
+counts <- rbind(EIOS_total, HM_total) %>% mutate(source = c(rep("EIOS", 24), rep("HealthMap", 24)))
+counts$source <- factor(counts$source, levels = c("HealthMap", "EIOS"))
+
+ggplot(counts, aes(x = country, y = total, fill = source)) + 
+  geom_col(position = "dodge") + 
+  geom_text(aes(label=total, y = -800), position = position_dodge(width = 1), size = 2.9) +
+  coord_flip() +
+  scale_x_discrete(limits = rev(levels(counts$country))) + 
+  labs(title = "Total number of events (HealthMap: 5.5 years, EIOS: 2.5 years)", x = "", y = "total counts") +
+  scale_fill_brewer(palette = "Set1")
+ggsave("EIOS+HM total counts.jpeg", scale = 1.1)
 
 # divide into categories of data abundance ('high', 'medium', 'low')
 FluNet_total$total_cat <- cut(FluNet_total$total, 
