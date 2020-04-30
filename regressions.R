@@ -1,11 +1,13 @@
 library(ggplot2)
 library(lubridate)
+library(gamlss)
 library(dplyr)
 library(tidyr)
 library(RColorBrewer)
 library(readxl)
 
-metrics <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/metrics_all_bcp.csv", stringsAsFactors = TRUE)
+
+metrics <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/metrics.csv", stringsAsFactors = TRUE)
 metrics$false_alarm_rate <- 1 - metrics$specificity
 
 metrics_long <- pivot_longer(metrics, cols = c(sens_per_outbreak, sens_per_week, sens_exact, PPV, specificity, frac_prevented), 
@@ -18,18 +20,19 @@ met_ind <- full_join(metrics, indicators, by = "country")
 met_ind$HM_total_cat <- ordered(met_ind$HM_total_cat, levels = c("low", "medium","high"))
 met_ind$EIOS_total_cat <- ordered(met_ind$EIOS_total_cat, levels = c("low", "medium","high"))
 
+# select important predictors and log total and max counts
 metrics_HM <- filter(met_ind, source == "EIOS") %>% 
   select(-c(X.x, X.y, FluNet_total_cat, FluNet_total, FluNet_max, EIOS_total_cat, EIOS_total, EIOS_max, ISO, 
             influenza_transmission_zone, ISO, problematic_FluNet, problematic_EIOS, problematic_HM, language)) %>% 
-  mutate(latitude = abs(latitude))
+  mutate(latitude = abs(latitude), HM_total = log(HM_total), HM_max = log(HM_max))
 # set counts for USA to NA so that they are disregarded in regressions, because they are outliers
-metrics_HM[metrics_HM$country == "United States", 11:12] <- NA
+# metrics_HM[metrics_HM$country == "United States", 11:12] <- NA
 metrics_EIOS <- filter(met_ind, source == "EIOS") %>% 
   select(-c(X.x, X.y, FluNet_total_cat, FluNet_total, FluNet_max, HM_total_cat, HM_total, HM_max, ISO, 
             influenza_transmission_zone, ISO, problematic_FluNet, problematic_EIOS, problematic_HM, language)) %>% 
-  mutate(latitude = abs(latitude))
+  mutate(latitude = abs(latitude), EIOS_total = log(EIOS_total), EIOS_max = log(EIOS_max))
 # set counts for USA to NA so that they are disregarded in regressions, because they are outliers
-metrics_EIOS[metrics_EIOS$country == "United States", 11:12] <- NA
+# metrics_EIOS[metrics_EIOS$country == "United States", 11:12] <- NA
 
 # list of all predictors
 pred_EIOS <- names(metrics_EIOS)[10:19]
@@ -72,6 +75,21 @@ lm_EIOS_sens_exact_R2
 
 par(mfrow = c(2, 2))
 sapply(lm_EIOS_sens_exact, plot)  
+
+
+zinf_EIOS_sens_exact <- lapply(10:19, function(x) gamlss(metrics_EIOS$sens_exact ~ metrics_EIOS[,x], family = "BEZI",
+                                                         trace = F))
+zinf_EIOS_sens_exact_summary <- lapply(zinf_EIOS_sens_exact, summary)
+zinf_EIOS_sens_exact_coef <- sapply(zinf_EIOS_sens_exact_summary, '[', ,1)
+zinf_EIOS_sens_exact_coef <- unlist(zinf_EIOS_sens_exact_coef)
+zinf_EIOS_sens_exact_coef <- zinf_EIOS_sens_exact_coef[!grepl(x = names(zinf_EIOS_sens_exact_coef), pattern = "Intercept")]
+zinf_EIOS_sens_exact_pval <- sapply(zinf_EIOS_sens_exact_summary, '[', ,4)
+zinf_EIOS_sens_exact_pval <- unlist(zinf_EIOS_sens_exact_pval)
+zinf_EIOS_sens_exact_pval <- zinf_EIOS_sens_exact_pval[!grepl(x = names(zinf_EIOS_sens_exact_pval), pattern = "Intercept")]
+
+zinf_EIOS_sens_exact_df <- data.frame("coefficient" = zinf_EIOS_sens_exact_coef, "p-value" = zinf_EIOS_sens_exact_pval)
+row.names(zinf_EIOS_sens_exact_df) <- c("EIOS_total_cat.L", "EIOS_total_cat.Q", "EIOS_total", "EIOS_max", "global_region.temp_South", 
+                                        "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", "TIU.2017")
 
 
 # sensitivity per week
@@ -442,3 +460,113 @@ lm_EIOS_multi_step_R2
 lm_EIOS_multi_step_adjR2 <- sapply(lm_EIOS_multi_step, '[[', "adj.r.squared")
 names(lm_EIOS_multi_step_adjR2) <- names(metrics_EIOS)[3:8]
 lm_EIOS_multi_step_adjR2
+
+
+#### advanced variable selection ####
+library(caret)
+library(leaps)
+library(MASS)
+library(relaimpo)
+library(car)
+library(gvlma)
+
+full_model_HM_sensOB <- lm(sens_per_outbreak ~ HM_total_cat + HM_total + HM_max + global_region + english + 
+                             HDI.2018 + latitude + longitude + PFI.2018 + TIU.2017 + HM_filter_lang, 
+                           data = metrics_HM)
+vif(full_model_HM_sensOB)
+reduced_model_HM_sensOB <- lm(sens_per_outbreak ~ HM_total + global_region + english + 
+                             HDI.2018 + latitude + PFI.2018 + HM_filter_lang, 
+                           data = metrics_HM)
+vif(reduced_model_HM_sensOB) # all these predictors don't have collinearity (VIF < 3)
+summary(reduced_model_HM_sensOB)
+
+lm_HM_multi <- lapply(3:8, function(x) lm(metrics_HM[,x] ~ metrics_HM$HM_total + metrics_HM$global_region + metrics_HM$english + 
+                                            metrics_HM$HDI.2018 + metrics_HM$latitude + metrics_HM$PFI.2018 + metrics_HM$HM_filter_lang))
+AIC_HM_multi <- lapply(lm_HM_multi, stepAIC, direction = "both", trace = FALSE)
+AIC_HM_multi_summary <- lapply(AIC_HM_multi, summary)
+AIC_HM_multi_coef <- lapply(AIC_HM_multi_summary, '[[', "coefficients")
+names(AIC_HM_multi_coef) <- names(metrics_HM)[3:8]
+
+AIC_HM_multi_AIC <- sapply(AIC_HM_multi, AIC)
+names(AIC_HM_multi_AIC) <- names(metrics_HM)[3:8]
+
+AIC_HM_multi_radj <- sapply(AIC_HM_multi_summary, '[[', "adj.r.squared")
+names(AIC_HM_multi_radj) <- names(metrics_HM)[3:8]
+
+
+AIC_HM_multi_outlier <- lapply(AIC_HM_multi, outlierTest)
+AIC_HM_multi_leverageplot <- lapply(AIC_HM_multi, leveragePlots)
+
+AIC_HM_multi_spreadplot <- lapply(AIC_HM_multi, spreadLevelPlot)
+AIC_HM_multi_ncvtest <- lapply(AIC_HM_multi, ncvTest)
+AIC_HM_multi_ncvtest_p <- sapply(AIC_HM_multi_ncvtest, '[[', "p")
+
+AIC_HM_multi_res <- data.frame(sapply(AIC_HM_multi, '[[', "residuals"))
+colnames(AIC_HM_multi_res) <- names(metrics_HM)[3:8]
+
+par(mfrow = c(1, 1))
+AIC_HM_multi_hist_res <- apply(AIC_HM_multi_res, 2, hist, main = "")
+AIC_HM_multi_qqplot <- lapply(AIC_HM_multi, qqPlot)
+
+par(mfrow= c(2, 2))
+lapply(AIC_HM_multi, plot)
+
+AIC_HM_multi_crplot <- lapply(AIC_HM_multi, crPlots)
+
+AIC_HM_multi_gvlma <- lapply(AIC_HM_multi, gvlma)
+
+
+
+leaps_HM_sensOB <- regsubsets(sens_per_outbreak ~ HM_total + global_region + english + 
+                               HDI.2018 + latitude + PFI.2018 + HM_filter_lang, 
+                             data = metrics_HM, nvmax = 5, method = "seqrep", all.best = T)
+summary(leaps_HM_sensOB)
+
+
+
+set.seed(123)
+train.control <- trainControl(method = "cv", number = 5)
+train_HM_sensOB <- train(sens_per_outbreak ~ HM_total + global_region + english + 
+                           HDI.2018 + latitude + PFI.2018 + HM_filter_lang, 
+                         data = metrics_HM,
+                        method = "leapSeq", 
+                        tuneGrid = data.frame(nvmax = 1:5),
+                        metric = "Rsquared",
+                        trControl = train.control
+)
+train_HM_sensOB$results
+train_HM_sensOB$bestTune
+summary(train_HM_sensOB$finalModel)
+# cross-validation gives weird results, r-squared is higher with 1 variable than with multiple
+
+
+train_HM_sensOB <- train(sens_per_outbreak ~ HM_total + global_region + english + 
+                           HDI.2018 + latitude + PFI.2018 + HM_filter_lang, 
+                         data = metrics_HM,
+                         method = "lmStepAIC", 
+                         trace = FALSE,
+                         trControl = train.control,
+                         metric = "Rsquared"
+)
+train_HM_sensOB$results
+train_HM_sensOB$bestTune
+summary(train_HM_sensOB$finalModel)
+
+
+calc.relimp(reduced_model_HM_sensOB, type = c("lmg","last","first"),
+            rela=TRUE)
+
+
+outlierTest(full_model_HM_sensOB)
+qqPlot(full_model_HM_sensOB, main="QQ Plot")
+leveragePlots(full_model_HM_sensOB)
+influencePlot(full_model_HM_sensOB, id.method="identify")
+ncvTest(full_model_HM_sensOB)
+spreadLevelPlot(full_model_HM_sensOB)
+
+# variance inflation factors
+vif(full_model_HM_sensOB)
+sqrt(vif((full_model_HM_sensOB)))
+
+crPlots(full_model_HM_sensOB)
+
