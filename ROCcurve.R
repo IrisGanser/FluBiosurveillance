@@ -383,3 +383,53 @@ for(i in seq_along(country_list)){
 
 
 
+metrics_df_HM_wide <- metrics_df_HM_wide %>% mutate(dist_sens_far = sqrt((1-sens_week)^2 + FAR^2), 
+                                                    dist_time_far = sqrt((1-frac_prevented)^2 + FAR^2))
+
+
+
+HM_best_sens_far <- metrics_df_HM_wide %>% group_by(country) %>% filter(dist_sens_far == min(dist_sens_far)) %>%
+  select(c(country, cutoff, FAR, sens_week))
+HM_opt_cutoff_sens_far <- HM_best_sens_far %>% 
+  filter(!country %in% c("Bulgaria", "Costa Rica", "Ecuador", "Egypt", "Germany", "Greece", "Nigeria", "Saudi Arabia", 
+                         "South Africa", "Sweden", "Thailand", "Uruguay")) 
+write.csv(HM_best_sens_far, "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/HM ROC cutoff.csv", row.names = FALSE)
+
+HM_best_time_far <- metrics_df_HM_wide %>% group_by(country) %>% filter(dist_time_far == min(dist_time_far)) %>%
+  select(c(country, cutoff, FAR, frac_prevented))
+HM_opt_cutoff_time_far <- HM_best_time_far %>% 
+  filter(!country %in% c("Bulgaria", "Costa Rica", "Ecuador", "Germany", "Greece", "Nigeria", "Saudi Arabia", 
+                         "South Africa", "Sweden", "Thailand", "Uruguay")) 
+write.csv(HM_best_time_far, "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/HM AMOC cutoff.csv", row.names = FALSE)
+
+
+
+# EIOS
+metrics_df_EIOS_wide <- metrics_df_EIOS_wide %>% mutate(dist_sens_far = sqrt((1-sens_week)^2 + FAR^2), 
+                                                    dist_time_far = sqrt((1-frac_prevented)^2 + FAR^2))
+
+EIOS_best_sens_far <- metrics_df_EIOS_wide %>% group_by(country) %>% filter(dist_sens_far == min(dist_sens_far)) %>%
+  select(c(country, cutoff, FAR, sens_week))
+EIOS_opt_cutoff_sens_far <- EIOS_best_sens_far %>% 
+  filter(!country %in% c("Bulgaria", "Costa Rica", "Ecuador", "Egypt", "Germany", "Greece", "Nigeria", "Saudi Arabia", 
+                         "South Africa", "Sweden", "Thailand", "Uruguay")) 
+write.csv(EIOS_best_sens_far, "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/EIOS ROC cutoff.csv", row.names = FALSE)
+
+EIOS_best_time_far <- metrics_df_EIOS_wide %>% group_by(country) %>% filter(dist_time_far == min(dist_time_far)) %>%
+  select(c(country, cutoff, FAR, frac_prevented))
+EIOS_opt_cutoff_time_far <- EIOS_best_time_far %>% 
+  filter(!country %in% c("Bulgaria", "Costa Rica", "Ecuador", "Germany", "Greece", "Nigeria", "Saudi Arabia", 
+                         "South Africa", "Sweden", "Thailand", "Uruguay")) 
+write.csv(EIOS_best_time_far, "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/EIOS AMOC cutoff.csv", row.names = FALSE)
+
+
+
+getmode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+range_FAR <- metrics_df_HM_wide %>% group_by(country) %>% summarize(FAR_mode = getmode(FAR), FAR_min = min(FAR), max_FAR = max(FAR))
+range(range_FAR$FAR_mode)
+range(range_FAR$FAR_min)
+range(range_FAR$max_FAR)
