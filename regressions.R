@@ -21,12 +21,12 @@ met_ind$HM_total_cat <- ordered(met_ind$HM_total_cat, levels = c("low", "medium"
 met_ind$EIOS_total_cat <- ordered(met_ind$EIOS_total_cat, levels = c("low", "medium","high"))
 
 # select important predictors and log total and max counts
-metrics_HM <- filter(met_ind, source == "EIOS") %>% 
+metrics_HM <- filter(met_ind, source == "HealthMap") %>% 
   select(-c(X.x, X.y, FluNet_total_cat, FluNet_total, FluNet_max, EIOS_total_cat, EIOS_total, EIOS_max, ISO, 
             influenza_transmission_zone, ISO, problematic_FluNet, problematic_EIOS, problematic_HM, language)) %>% 
   mutate(latitude = abs(latitude), HM_total = log(HM_total), HM_max = log(HM_max))
-# set counts for USA to NA so that they are disregarded in regressions, because they are outliers
-# metrics_HM[metrics_HM$country == "United States", 11:12] <- NA
+
+
 metrics_EIOS <- filter(met_ind, source == "EIOS") %>% 
   select(-c(X.x, X.y, FluNet_total_cat, FluNet_total, FluNet_max, HM_total_cat, HM_total, HM_max, ISO, 
             influenza_transmission_zone, ISO, problematic_FluNet, problematic_EIOS, problematic_HM, language)) %>% 
@@ -486,6 +486,16 @@ AIC_HM_multi <- lapply(lm_HM_multi, stepAIC, direction = "both", trace = FALSE)
 AIC_HM_multi_summary <- lapply(AIC_HM_multi, summary)
 AIC_HM_multi_coef <- lapply(AIC_HM_multi_summary, '[[', "coefficients")
 names(AIC_HM_multi_coef) <- names(metrics_HM)[3:8]
+AIC_HM_multi_confint <- lapply(AIC_HM_multi, confint)
+names(AIC_HM_multi_confint) <- names(metrics_HM)[3:8]
+
+
+AIC_HM_multi_coef_df <- do.call("rbind", lapply(AIC_HM_multi_coef, as.data.frame))
+#write.csv(AIC_HM_multi_coef_df, "regression_coefficients_HM.csv")
+AIC_HM_multi_confint_df <- do.call("rbind", lapply(AIC_HM_multi_confint, as.data.frame))
+AIC_HM_multi_confint_df <- round(AIC_HM_multi_confint_df, 4)
+AIC_HM_multi_confint_df <- AIC_HM_multi_confint_df %>% unite(col = "95%_confint", sep = " - ", remove = TRUE)
+#write.csv(AIC_HM_multi_confint_df, "regression_coefficients_confint_HM.csv", quote = FALSE)
 
 AIC_HM_multi_AIC <- sapply(AIC_HM_multi, AIC)
 names(AIC_HM_multi_AIC) <- names(metrics_HM)[3:8]
@@ -515,7 +525,69 @@ AIC_HM_multi_crplot <- lapply(AIC_HM_multi, crPlots)
 
 AIC_HM_multi_gvlma <- lapply(AIC_HM_multi, gvlma)
 
+# have a closer look at PPV
+model_HM_PPV <- lm(PPV ~ HM_total + global_region + english + 
+                                HDI.2018 + latitude + PFI.2018 + HM_filter_lang, 
+                              data = metrics_HM)
+summary(model_HM_PPV)
 
+### EIOS ###
+
+reduced_model_EIOS_sensOB <- lm(sens_per_outbreak ~ EIOS_total + global_region + english + 
+                                HDI.2018 + latitude + PFI.2018, 
+                              data = metrics_EIOS)
+vif(reduced_model_EIOS_sensOB) # all these predictors don't have collinearity (VIF < 3)
+summary(reduced_model_EIOS_sensOB)
+
+lm_EIOS_multi <- lapply(3:8, function(x) lm(metrics_EIOS[,x] ~ metrics_EIOS$EIOS_total + metrics_EIOS$global_region + metrics_EIOS$english + 
+                                            metrics_EIOS$HDI.2018 + metrics_EIOS$latitude + metrics_EIOS$PFI.2018))
+AIC_EIOS_multi <- lapply(lm_EIOS_multi, stepAIC, direction = "both", trace = FALSE)
+AIC_EIOS_multi_summary <- lapply(AIC_EIOS_multi, summary)
+AIC_EIOS_multi_coef <- lapply(AIC_EIOS_multi_summary, '[[', "coefficients")
+names(AIC_EIOS_multi_coef) <- names(metrics_EIOS)[3:8]
+AIC_EIOS_multi_confint <- lapply(AIC_EIOS_multi, confint)
+names(AIC_EIOS_multi_confint) <- names(metrics_EIOS)[3:8]
+
+
+AIC_EIOS_multi_coef_df <- do.call("rbind", lapply(AIC_EIOS_multi_coef, as.data.frame))
+#write.csv(AIC_EIOS_multi_coef_df, "regression_coefficients_EIOS.csv")
+AIC_EIOS_multi_confint_df <- do.call("rbind", lapply(AIC_EIOS_multi_confint, as.data.frame))
+AIC_EIOS_multi_confint_df <- round(AIC_EIOS_multi_confint_df, 4)
+AIC_EIOS_multi_confint_df <- AIC_EIOS_multi_confint_df %>% unite(col = "95%_confint", sep = " - ", remove = TRUE)
+write.csv(AIC_EIOS_multi_confint_df, "regression_coefficients_confint_EIOS.csv", quote = FALSE)
+
+AIC_EIOS_multi_AIC <- sapply(AIC_EIOS_multi, AIC)
+names(AIC_EIOS_multi_AIC) <- names(metrics_EIOS)[3:8]
+
+AIC_EIOS_multi_radj <- sapply(AIC_EIOS_multi_summary, '[[', "adj.r.squared")
+names(AIC_EIOS_multi_radj) <- names(metrics_EIOS)[3:8]
+
+
+AIC_EIOS_multi_outlier <- lapply(AIC_EIOS_multi, outlierTest)
+AIC_EIOS_multi_leverageplot <- lapply(AIC_EIOS_multi, leveragePlots)
+
+AIC_EIOS_multi_spreadplot <- lapply(AIC_EIOS_multi, spreadLevelPlot)
+AIC_EIOS_multi_ncvtest <- lapply(AIC_EIOS_multi, ncvTest)
+AIC_EIOS_multi_ncvtest_p <- sapply(AIC_EIOS_multi_ncvtest, '[[', "p")
+
+AIC_EIOS_multi_res <- data.frame(sapply(AIC_EIOS_multi, '[[', "residuals"))
+colnames(AIC_EIOS_multi_res) <- names(metrics_EIOS)[3:8]
+
+par(mfrow = c(1, 1))
+AIC_EIOS_multi_hist_res <- apply(AIC_EIOS_multi_res, 2, hist, main = "")
+AIC_EIOS_multi_qqplot <- lapply(AIC_EIOS_multi, qqPlot)
+
+par(mfrow= c(2, 2))
+lapply(AIC_EIOS_multi, plot)
+
+AIC_EIOS_multi_crplot <- lapply(AIC_EIOS_multi, crPlots)
+
+AIC_EIOS_multi_gvlma <- lapply(AIC_EIOS_multi, gvlma)
+
+
+
+
+## try some stuff
 
 leaps_HM_sensOB <- regsubsets(sens_per_outbreak ~ HM_total + global_region + english + 
                                HDI.2018 + latitude + PFI.2018 + HM_filter_lang, 
