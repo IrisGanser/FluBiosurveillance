@@ -25,7 +25,8 @@ metrics_HM <- filter(met_ind, source == "HealthMap") %>%
   select(-c(X.x, X.y, FluNet_total_cat, FluNet_total, FluNet_max, EIOS_total_cat, EIOS_total, EIOS_max, ISO, 
             influenza_transmission_zone, ISO, problematic_FluNet, problematic_EIOS, problematic_HM, language)) %>% 
   mutate(latitude = abs(latitude), HM_total = log(HM_total), HM_max = log(HM_max))
-
+# set Nigeria to NA for sens_per_outbreak and frac_prevented because it is an outlier and distorts the regressions
+metrics_HM[metrics_HM$country == "Nigeria", c(3, 8)] <- NA
 
 metrics_EIOS <- filter(met_ind, source == "EIOS") %>% 
   select(-c(X.x, X.y, FluNet_total_cat, FluNet_total, FluNet_max, HM_total_cat, HM_total, HM_max, ISO, 
@@ -33,6 +34,8 @@ metrics_EIOS <- filter(met_ind, source == "EIOS") %>%
   mutate(latitude = abs(latitude), EIOS_total = log(EIOS_total), EIOS_max = log(EIOS_max))
 # set counts for USA to NA so that they are disregarded in regressions, because they are outliers
 # metrics_EIOS[metrics_EIOS$country == "United States", 11:12] <- NA
+
+country_list <- levels(met_ind$country)
 
 # list of all predictors
 pred_EIOS <- names(metrics_EIOS)[10:19]
@@ -164,14 +167,64 @@ par(mfrow = c(2, 2))
 sapply(lm_EIOS_PPV, plot) 
 
 
+reg <- vector(mode = "list", length = 6)
+reg.fun <- function(x, y, df){
+  
+  .reg.fun<- function(x, y, df){
+    reg <- lm(df[,y] ~ df[,x])
+    return(reg)
+  }
+  
+  for (i in seq_along(y)){
+      reg[[i]] <- mapply(.reg.fun, x, y[i], MoreArgs = list(df = df))
+    }
+  return(reg)
+}
+
+reg.summary <- function(x, y, df){
+  
+  .reg.fun<- function(x, y, df){
+    reg <- lm(df[,y] ~ df[,x])
+    summary <- summary(reg)
+    return(summary)
+  }
+  
+  for (i in seq_along(y)){
+    reg[[i]] <- mapply(.reg.fun, x, y[i], MoreArgs = list(df = df))
+  }
+  return(reg)
+}
+
+predictors <- names(metrics_HM[10:20])
+outcomes <- names(metrics_HM[3:8])
+reg_list_HM <- reg.fun(x = predictors, y = outcomes, df = metrics_HM)
+names(reg_list_HM) <- names(metrics_HM[3:8])
+
+reg_summary_HM <- reg.summary(x = predictors, y = outcomes, df = metrics_HM)
+
+reg_HM_coef_list <- vector(mode = "list")
+for(i in 1:6){
+  reg_HM_coef_list[[i]] <- do.call("rbind", reg_summary_HM[[i]][4, 1:11])
+}
+
+reg_HM_coef_df <- do.call("rbind", lapply(reg_HM_coef_list, as.data.frame))
+reg_HM_coef_df <- reg_HM_coef_df[-grep("Intercept", rownames(reg_HM_coef_df)), ]
+reg_HM_coef_df$outcome <- rep(names(metrics_HM)[3:8], each = 13)
+rownames(reg_HM_coef_df) <- paste(rep(c("HM_total_cat.L", "HM_total_cat.Q", "HM_total", "HM_max", "global_region.temp_South", 
+                              "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", 
+                              "TIU.2017", "HM_filter_lang"), 6), rep(names(metrics_HM)[3:8], each = 13), sep = ".")
 
 ### HealthMap
 # sensitivity per outbreak
-lm_HM_sensOB <- lapply(10:19, function(x) lm(metrics_HM$sens_per_outbreak ~ metrics_HM[,x]))
+lm_HM_sensOB <- lapply(10:20, function(x) lm(metrics_HM$sens_per_outbreak ~ metrics_HM[,x]))
 lm_HM_sensOB_summary <- lapply(lm_HM_sensOB, summary)
+
 lm_HM_sensOB_coef_list <- lapply(lm_HM_sensOB_summary, function(x) x$coefficients[-1, c(1,4)])
-lm_HM_sensOB_coef_vec <- unlist(lm_HM_sensOB_coef_list)
-lm_HM_sensOB_coef <- data.frame("coefficient" = lm_HM_sensOB_coef_vec[coef], "p-value" = lm_HM_sensOB_coef_vec[pval])
+lm_HM_sensOB_coef_list <- lapply(lm_HM_sensOB_summary, '[[', "coefficients")
+names(lm_HM_sensOB_coef_list) <- names(metrics_HM[10:20])
+lm_HM_sensOB_coef_df <- do.call("rbind", lapply(lm_HM_sensOB_coef_list, as.data.frame))
+lm_HM_sensOB_coef_df <- lm_HM_sensOB_coef_df[-grep("Intercept", rownames(lm_HM_sensOB_coef_df)), ]
+
 row.names(lm_HM_sensOB_coef) <- c("HM_total_cat.L", "HM_total_cat.Q", "HM_total", "HM_max", "global_region.temp_South", 
                                   "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", "TIU.2017")
 round(lm_HM_sensOB_coef, 3)
@@ -511,11 +564,11 @@ AIC_HM_multi_spreadplot <- lapply(AIC_HM_multi, spreadLevelPlot)
 AIC_HM_multi_ncvtest <- lapply(AIC_HM_multi, ncvTest)
 AIC_HM_multi_ncvtest_p <- sapply(AIC_HM_multi_ncvtest, '[[', "p")
 
-AIC_HM_multi_res <- data.frame(sapply(AIC_HM_multi, '[[', "residuals"))
-colnames(AIC_HM_multi_res) <- names(metrics_HM)[3:8]
+AIC_HM_multi_res <- lapply(AIC_HM_multi, '[[', "residuals")
+names(AIC_HM_multi_res) <- names(metrics_HM)[3:8]
 
 par(mfrow = c(1, 1))
-AIC_HM_multi_hist_res <- apply(AIC_HM_multi_res, 2, hist, main = "")
+AIC_HM_multi_hist_res <- lapply(AIC_HM_multi_res, hist, main = "")
 AIC_HM_multi_qqplot <- lapply(AIC_HM_multi, qqPlot)
 
 par(mfrow= c(2, 2))
