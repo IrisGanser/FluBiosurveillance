@@ -167,52 +167,7 @@ par(mfrow = c(2, 2))
 sapply(lm_EIOS_PPV, plot) 
 
 
-reg <- vector(mode = "list", length = 6)
-reg.fun <- function(x, y, df){
-  
-  .reg.fun<- function(x, y, df){
-    reg <- lm(df[,y] ~ df[,x])
-    return(reg)
-  }
-  
-  for (i in seq_along(y)){
-      reg[[i]] <- mapply(.reg.fun, x, y[i], MoreArgs = list(df = df))
-    }
-  return(reg)
-}
 
-reg.summary <- function(x, y, df){
-  
-  .reg.fun<- function(x, y, df){
-    reg <- lm(df[,y] ~ df[,x])
-    summary <- summary(reg)
-    return(summary)
-  }
-  
-  for (i in seq_along(y)){
-    reg[[i]] <- mapply(.reg.fun, x, y[i], MoreArgs = list(df = df))
-  }
-  return(reg)
-}
-
-predictors <- names(metrics_HM[10:20])
-outcomes <- names(metrics_HM[3:8])
-reg_list_HM <- reg.fun(x = predictors, y = outcomes, df = metrics_HM)
-names(reg_list_HM) <- names(metrics_HM[3:8])
-
-reg_summary_HM <- reg.summary(x = predictors, y = outcomes, df = metrics_HM)
-
-reg_HM_coef_list <- vector(mode = "list")
-for(i in 1:6){
-  reg_HM_coef_list[[i]] <- do.call("rbind", reg_summary_HM[[i]][4, 1:11])
-}
-
-reg_HM_coef_df <- do.call("rbind", lapply(reg_HM_coef_list, as.data.frame))
-reg_HM_coef_df <- reg_HM_coef_df[-grep("Intercept", rownames(reg_HM_coef_df)), ]
-reg_HM_coef_df$outcome <- rep(names(metrics_HM)[3:8], each = 13)
-rownames(reg_HM_coef_df) <- paste(rep(c("HM_total_cat.L", "HM_total_cat.Q", "HM_total", "HM_max", "global_region.temp_South", 
-                              "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", 
-                              "TIU.2017", "HM_filter_lang"), 6), rep(names(metrics_HM)[3:8], each = 13), sep = ".")
 
 ### HealthMap
 # sensitivity per outbreak
@@ -324,6 +279,103 @@ lm_HM_PPV_R2
 
 par(mfrow = c(2, 2))
 sapply(lm_HM_PPV, plot) 
+
+
+##### short univariable regressions #####
+
+reg.fun <- function(x, y, df){
+  reg <- vector(mode = "list", length = 6)
+  .reg.fun<- function(x, y, df){
+    reg <- lm(df[,y] ~ df[,x])
+    return(reg)
+  }
+  
+  for (i in seq_along(y)){
+    reg[[i]] <- mapply(.reg.fun, x, y[i], MoreArgs = list(df = df))
+  }
+  return(reg)
+}
+
+reg.summary <- function(x, y, df){
+  reg <- vector(mode = "list", length = 6)
+  .reg.fun<- function(x, y, df){
+    reg <- lm(df[,y] ~ df[,x])
+    summary <- summary(reg)
+    return(summary)
+  }
+  
+  for (i in seq_along(y)){
+    reg[[i]] <- mapply(.reg.fun, x, y[i], MoreArgs = list(df = df))
+  }
+  return(reg)
+}
+
+predictors <- names(metrics_HM[10:20])
+outcomes <- names(metrics_HM[3:8])
+reg_list_HM <- reg.fun(x = predictors, y = outcomes, df = metrics_HM)
+names(reg_list_HM) <- names(metrics_HM[3:8])
+
+reg_HM_confint_list <- vector(mode = "list")
+for(i in 1:6){
+  reg_HM_confint_list[[i]] <- lapply(reg_list_HM[[i]], confint)
+  reg_HM_confint_list[[i]] <- do.call("rbind", lapply(reg_HM_confint_list[[i]], as.data.frame))
+}
+reg_HM_confint_df <- do.call("rbind", lapply(reg_HM_confint_list, as.data.frame))
+reg_HM_confint_df <- reg_HM_confint_df[-grep("Intercept", rownames(reg_HM_confint_df)), ]
+reg_HM_confint_df <- round(reg_HM_confint_df, 4)
+reg_HM_confint_df <- reg_HM_confint_df %>% unite(col = "confint_95", sep = " - ")
+
+
+reg_summary_HM <- reg.summary(x = predictors, y = outcomes, df = metrics_HM)
+
+reg_HM_coef_list <- vector(mode = "list")
+for(i in 1:6){
+  reg_HM_coef_list[[i]] <- do.call("rbind", reg_summary_HM[[i]][4, 1:11])
+}
+
+reg_HM_coef_df <- do.call("rbind", lapply(reg_HM_coef_list, as.data.frame))
+reg_HM_coef_df <- reg_HM_coef_df[-grep("Intercept", rownames(reg_HM_coef_df)), ]
+reg_HM_coef_df$confint_95 <- reg_HM_confint_df$confint_95 
+rownames(reg_HM_coef_df) <- paste(rep(c("HM_total_cat.L", "HM_total_cat.Q", "HM_total", "HM_max", "global_region.temp_South", 
+                                        "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", 
+                                        "TIU.2017", "HM_filter_lang"), 6), rep(names(metrics_HM)[3:8], each = 13), sep = ".")
+
+write.csv(reg_HM_coef_df, "univariable regressions HM.csv")
+
+
+
+## EIOS ## 
+predictors <- names(metrics_EIOS[10:19])
+outcomes <- names(metrics_EIOS[3:8])
+reg_list_EIOS <- reg.fun(x = predictors, y = outcomes, df = metrics_EIOS)
+names(reg_list_EIOS) <- names(metrics_EIOS[3:8])
+
+reg_EIOS_confint_list <- vector(mode = "list")
+for(i in 1:6){
+  reg_EIOS_confint_list[[i]] <- lapply(reg_list_EIOS[[i]], confint)
+  reg_EIOS_confint_list[[i]] <- do.call("rbind", lapply(reg_EIOS_confint_list[[i]], as.data.frame))
+}
+reg_EIOS_confint_df <- do.call("rbind", lapply(reg_EIOS_confint_list, as.data.frame))
+reg_EIOS_confint_df <- reg_EIOS_confint_df[-grep("Intercept", rownames(reg_EIOS_confint_df)), ]
+reg_EIOS_confint_df <- round(reg_EIOS_confint_df, 4)
+reg_EIOS_confint_df <- reg_EIOS_confint_df %>% unite(col = "confint_95", sep = " - ")
+
+
+reg_summary_EIOS <- reg.summary(x = predictors, y = outcomes, df = metrics_EIOS)
+
+reg_EIOS_coef_list <- vector(mode = "list")
+for(i in 1:6){
+  reg_EIOS_coef_list[[i]] <- do.call("rbind", reg_summary_EIOS[[i]][4, 1:10])
+}
+
+reg_EIOS_coef_df <- do.call("rbind", lapply(reg_EIOS_coef_list, as.data.frame))
+reg_EIOS_coef_df <- reg_EIOS_coef_df[-grep("Intercept", rownames(reg_EIOS_coef_df)), ]
+reg_EIOS_coef_df$confint_95 <- reg_EIOS_confint_df$confint_95 
+rownames(reg_EIOS_coef_df) <- paste(rep(c("EIOS_total_cat.L", "EIOS_total_cat.Q", "EIOS_total", "EIOS_max", "global_region.temp_South", 
+                                        "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", 
+                                        "TIU.2017"), 6), rep(names(metrics_EIOS)[3:8], each = 12), sep = ".")
+
+write.csv(reg_EIOS_coef_df, "univariable regressions EIOS.csv")
 
 
 #### regressions with interactions #####
