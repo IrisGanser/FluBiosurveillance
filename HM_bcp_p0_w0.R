@@ -249,3 +249,235 @@ HM_byweek<- HM_byweek %>% mutate_at(vars(53:64), ~replace(., . == "end", TRUE))
 
 write.csv(HM_byweek, file = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/HM_epidemic_bcp_p0_w0.csv")
 
+
+#### calculate evaluation metrics #####
+# load epidemic datasets with outbreak indicators
+FluNet_epidemic <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/FluNet_epidemic.csv")
+FluNet_epidemic$SDATE <- as.POSIXct(FluNet_epidemic$SDATE)
+HM_epidemic <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/HM_epidemic_bcp_p0_w0.csv") %>%
+  select(-"X")
+HM_epidemic$date <- as.POSIXct(HM_epidemic$date)
+
+country_list <- levels(FluNet_epidemic$Country)
+
+# revise startend column of FluNet
+FluNet_epidemic$startend <- NA
+for(i in 2:nrow(FluNet_epidemic)){
+  if(FluNet_epidemic$epidemic[i] == TRUE & FluNet_epidemic$epidemic[i-1] == FALSE){
+    FluNet_epidemic$startend[i] <- "start"
+  }else if(FluNet_epidemic$epidemic[i] == FALSE & FluNet_epidemic$epidemic[i-1] == TRUE){
+    FluNet_epidemic$startend[i] <- "end"
+  }
+}
+FluNet_epidemic$startend[which(FluNet_epidemic$SDATE == min(FluNet_epidemic$SDATE))] <- NA
+# for Saudi Arabia (data start later)
+sa <- which(FluNet_epidemic$Country == "Saudi Arabia")
+FluNet_epidemic$startend[sa[1]] <- NA
+
+# calculate summary information on outbreaks
+FluNet_outbreak_length <- FluNet_epidemic %>% filter(epidemic == TRUE) %>% group_by(Country, grp = cumsum(!is.na(startend))) %>% 
+  summarize(length = n(), start_date = min(SDATE), end_date = max(SDATE), height = max(ALL_INF)) %>% 
+  mutate(outbreak_no = row_number()) %>% select(-grp)
+FluNet_outbreak_length$outbreak_interval <- interval(FluNet_outbreak_length$start_date, FluNet_outbreak_length$end_date)
+
+
+### sensitivity per outbreak
+# HealthMap
+HM_sens_outbreak_list <- vector(mode = "list")
+
+for(i in seq_along(country_list)){
+  detected_list <- vector(mode = "list")
+  FluNet_HM_temp <- filter(FluNet_epidemic, Country == country_list[i] &
+                             SDATE %within% interval(min(HM_epidemic$date), max(HM_epidemic$date)))
+  FluNet_HM_temp <- FluNet_HM_temp %>% group_by(Country) %>% mutate(outbreak_period = ((cumsum(!is.na(startend))-1) %/% 2) + 1)
+  
+  # state vector for every outbreak if detected or not
+  for(j in 1:max(FluNet_HM_temp$outbreak_period)){
+    FluNet_HM_temp_ob <- filter(FluNet_HM_temp, outbreak_period == j)
+    HM_temp <- filter(HM_epidemic, country == country_list[i] & 
+                        date %within% interval(min(FluNet_HM_temp_ob$SDATE), max(FluNet_HM_temp_ob$SDATE)))
+    
+    detected_list[[j]] <- sapply(53:64, function(x){
+      state <- FluNet_HM_temp_ob$epidemic
+      alarm <- HM_temp[, x]
+      return(sum(state[alarm == TRUE], na.rm = TRUE) > 0)
+    })
+  } 
+  
+  # transform list to df, sum up columns and calculate sens per outbreak
+  detected_df <- data.frame(matrix(unlist(detected_list), nrow = max(FluNet_HM_temp$outbreak_period), byrow = TRUE), 
+                            stringsAsFactors = FALSE)
+  HM_sens_outbreak_list[[i]] <- apply(detected_df, 2, sum)/max(FluNet_HM_temp$outbreak_period)
+}
+
+HM_sens_outbreak <- data.frame(matrix(unlist(HM_sens_outbreak_list), ncol = 12, byrow = TRUE))
+names(HM_sens_outbreak) <- paste(rep(c("p", "w"), each = 6), rep(c(0.05, 0.1, 0.2, 0.3, 0.5, 0.8), 2), sep = "_")
+HM_sens_outbreak$country <- country_list
+HM_sens_outbreak <- select(HM_sens_outbreak, country, everything())
+
+
+### sensitivity per week ###
+HM_sens_week_list <- vector(mode = "list")
+
+for(i in seq_along(country_list)){
+  FluNet_HM_temp <- filter(FluNet_epidemic, Country == country_list[i] &
+                             SDATE %within% interval(min(HM_epidemic$date), max(HM_epidemic$date)))
+  HM_temp <- filter(HM_epidemic, country == country_list[i])
+  
+  HM_sens_list <- sapply(53:64, function(x){
+    state_HM <- FluNet_HM_temp$epidemic
+    alarm_HM <- HM_temp[, x]
+    sens_HM <- sum(alarm_HM[state_HM == TRUE], na.rm = TRUE) / length(alarm_HM[state_HM == TRUE])
+    return(sens_HM)
+  })
+  
+  HM_sens_week_list[[i]] <- HM_sens_list
+}
+
+HM_sens_week <- data.frame(matrix(unlist(HM_sens_week_list), ncol = 12, byrow = TRUE))
+names(HM_sens_week) <- paste(rep(c("p", "w"), each = 6), rep(c(0.05, 0.1, 0.2, 0.3, 0.5, 0.8), 2), sep = "_")
+HM_sens_week$country <- country_list
+HM_sens_week <- select(HM_sens_week, country, everything())
+
+
+### false alarm rate
+HM_far_list <- vector(mode = "list")
+
+for(i in seq_along(country_list)){
+  FluNet_HM_temp <- filter(FluNet_epidemic, Country == country_list[i] &
+                             SDATE %within% interval(min(HM_epidemic$date), max(HM_epidemic$date)))
+  HM_temp <- filter(HM_epidemic, country == country_list[i])
+  
+  HM_far <- sapply(53:64, function(x){
+    state_HM <- FluNet_HM_temp$epidemic
+    alarm_HM <- HM_temp[, x]
+    far_HM <- sum(alarm_HM[state_HM == FALSE], na.rm = TRUE) / length(alarm_HM[state_HM == FALSE])
+    return(far_HM)
+  })
+  
+  HM_far_list[[i]] <- HM_far
+}
+
+HM_false_alarm_rate <- data.frame(matrix(unlist(HM_far_list), ncol = 12, byrow = TRUE))
+names(HM_false_alarm_rate) <- paste(rep(c("p", "w"), each = 6), rep(c(0.05, 0.1, 0.2, 0.3, 0.5, 0.8), 2), sep = "_")
+HM_false_alarm_rate$country <- country_list
+HM_false_alarm_rate <- select(HM_false_alarm_rate, country, everything())
+
+
+### PPV ####
+HM_PPV_list <- vector(mode = "list")
+
+for(i in seq_along(country_list)){
+  FluNet_HM_temp <- filter(FluNet_epidemic, Country == country_list[i] &
+                             SDATE %within% interval(min(HM_epidemic$date), max(HM_epidemic$date)))
+  HM_temp <- filter(HM_epidemic, country == country_list[i])
+  
+  HM_ppv <- sapply(53:64, function(x){
+    state_HM <- FluNet_HM_temp$epidemic
+    alarm_HM <- HM_temp[, x]
+    ppv_HM <- sum(alarm_HM[state_HM == FALSE], na.rm = TRUE) / sum(alarm_HM, na.rm = TRUE)
+    return(ppv_HM)
+  })
+  
+  HM_PPV_list[[i]] <- HM_ppv
+}
+
+HM_PPV <- data.frame(matrix(unlist(HM_PPV_list), ncol = 12, byrow = TRUE))
+names(HM_PPV) <- paste(rep(c("p", "w"), each = 6), rep(c(0.05, 0.1, 0.2, 0.3, 0.5, 0.8), 2), sep = "_")
+HM_PPV$country <- country_list
+HM_PPV <- select(HM_PPV, country, everything())
+
+
+### timeliness #### 
+HM_timeliness_list <- vector(mode = "list")
+for(i in seq_along(country_list)){
+  prevented_list <- vector(mode = "list")
+  FluNet_HM_temp <- filter(FluNet_epidemic, Country == country_list[i] &
+                             SDATE %within% interval(min(HM_epidemic$date), max(HM_epidemic$date)))
+  FluNet_HM_temp <- FluNet_HM_temp %>% group_by(Country) %>% mutate(outbreak_period = ((cumsum(!is.na(startend))-1) %/% 2) + 1)
+  
+  
+  for(j in 1:max(FluNet_HM_temp$outbreak_period)){
+    FluNet_HM_temp_ob <- filter(FluNet_HM_temp, outbreak_period == j)
+    HM_temp <- filter(HM_epidemic, country == country_list[i] & 
+                        date %within% interval(min(FluNet_HM_temp_ob$SDATE), max(FluNet_HM_temp_ob$SDATE)))
+    prevented <- 0
+    
+    prevented_list[[j]] <- sapply(53:64, function(x){
+      state <- FluNet_HM_temp_ob$epidemic
+      alarm <- HM_temp[, x]
+      length <- sum(FluNet_HM_temp_ob$epidemic)
+      
+      detect <- ifelse(sum(alarm[state == TRUE], na.rm = TRUE) > 0, TRUE, FALSE)
+      if (detect) {
+        first.alarm <- min(which(alarm[state == TRUE] == TRUE))
+        prevented <- (length - first.alarm) / length
+      }else{
+        prevented <- 0
+      }
+      return(prevented)
+    })
+    
+  }
+  
+  timeliness_df <- data.frame(matrix(unlist(prevented_list), nrow = max(FluNet_HM_temp$outbreak_period), byrow = TRUE), 
+                              stringsAsFactors = FALSE)
+  HM_timeliness_list[[i]] <- apply(timeliness_df, 2, mean)
+}  
+
+HM_timeliness <- data.frame(matrix(unlist(HM_timeliness_list), ncol = 12, byrow = TRUE))
+names(HM_timeliness) <- paste(rep(c("p", "w"), each = 6), rep(c(0.05, 0.1, 0.2, 0.3, 0.5, 0.8), 2), sep = "_")
+HM_timeliness$country <- country_list
+HM_timeliness <- select(HM_timeliness, country, everything())
+
+
+#### combine all metrics into one df ####
+metrics_df_HM <- rbind(HM_false_alarm_rate, HM_PPV, HM_sens_outbreak, HM_sens_week, HM_timeliness)
+metrics_df_HM$metric <- rep(c("FAR", "PPV", "sens_outbreak", "sens_week", "frac_prevented"), each = 24)
+metrics_df_HM_long <- pivot_longer(metrics_df_HM, cols = 2:13, names_to = "prior", values_to = "value")
+metrics_df_HM_wide <- pivot_wider(metrics_df_HM_long, names_from = "metric", values_from = "value")
+metrics_df_HM_wide$country <- as.factor(metrics_df_HM_wide$country)
+metrics_df_HM_wide$prior <- factor(metrics_df_HM_wide$prior, 
+                                      levels = paste(rep(c("p", "w"), each = 6), rep(c(0.05, 0.1, 0.2, 0.3, 0.5, 0.8), 2), sep = "_"),
+                                      labels = paste(rep(c("p0", "w0"), each = 6), rep(c(0.05, 0.1, 0.2, 0.3, 0.5, 0.8), 2), sep = ": "))
+
+### make plots ###
+ggplot(metrics_df_HM_wide, aes(x = country, y = sens_outbreak, fill = prior)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "Sensitivity per outbreak of HealthMap according to prior choices", y = "Sensitivity per outbreak", x = "") +
+  scale_x_discrete(limits = rev(levels(metrics_df_HM_wide$country))) +
+  scale_y_continuous(limits = c(0, 1)) 
+ggsave(filename = "sens_per_outbreak_p0_w0.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic")
+
+ggplot(metrics_df_HM_wide, aes(x = country, y = sens_week, fill = prior)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "Sensitivity per week of HealthMap according to prior choices", y = "Sensitivity per week", x = "") +
+  scale_x_discrete(limits = rev(levels(metrics_df_HM_wide$country))) +
+  scale_y_continuous(limits = c(0, 1)) 
+ggsave(filename = "sens_per_week_p0_w0.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic")
+
+ggplot(metrics_df_HM_wide, aes(x = country, y = 1-FAR, fill = prior)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "Specificity of HealthMap according to prior choices", y = "Specificity", x = "") +
+  scale_x_discrete(limits = rev(levels(metrics_df_HM_wide$country))) +
+  scale_y_continuous(limits = c(0, 1)) 
+ggsave(filename = "specificity_p0_w0.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic")
+
+ggplot(metrics_df_HM_wide, aes(x = country, y = PPV, fill = prior)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "Positive predictive value of HealthMap according to prior choices", y = "PPV", x = "") +
+  scale_x_discrete(limits = rev(levels(metrics_df_HM_wide$country))) +
+  scale_y_continuous(limits = c(0, 1)) 
+ggsave(filename = "PPV_p0_w0.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic")
+
+ggplot(metrics_df_HM_wide, aes(x = country, y = frac_prevented, fill = prior)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "Timeliness (prevented fraction) of HealthMap according to prior choices", y = "Prevented fraction", x = "") +
+  scale_x_discrete(limits = rev(levels(metrics_df_HM_wide$country))) +
+  scale_y_continuous(limits = c(0, 1)) 
+ggsave(filename = "frac_prevented_p0_w0.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic")
