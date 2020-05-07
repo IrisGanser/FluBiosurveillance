@@ -3,6 +3,7 @@ library(lubridate)
 library(dplyr)
 library(tidyr)
 library(RColorBrewer)
+library(binom)
 
 # load epidemic datasets with outbreak indicators
 FluNet_epidemic <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/FluNet_epidemic.csv")
@@ -225,6 +226,9 @@ ggplot(sens_per_outbreak_long, aes(x = country, y = sensitivity * 100, fill = so
   scale_fill_brewer(palette = "Set1")
 #ggsave(filename = "all_countries_sens_per_outbreak.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic")
 
+binom.confint(x = sens_per_outbreak$no_HM, n = sens_per_outbreak$no_FluNet_for_HM, method = "exact")
+binom.confint(x = sens_per_outbreak$no_EIOS, n = sens_per_outbreak$no_FluNet_for_EIOS, method = "exact")
+
 
 ##### calculate sensitivity per week #####
 sens_per_week_list <- vector(mode = "list")
@@ -240,15 +244,21 @@ for(i in seq_along(country_list)){
   alarm_HM <- HM_temp$epidemic
   sens_HM <- sum(alarm_HM[state_HM == TRUE], na.rm = TRUE)
   sens_HM <- sens_HM / length(alarm_HM[state_HM == TRUE])
+  sens_HM_CI <- binom.confint(sum(alarm_HM[state_HM == TRUE], na.rm = TRUE), length(alarm_HM[state_HM == TRUE]), method = "exact")
   
   state_EIOS <- FluNet_EIOS_temp$epidemic
   alarm_EIOS <- EIOS_temp$epidemic
   sens_EIOS <- sum(alarm_EIOS[state_EIOS == TRUE], na.rm = TRUE)
   sens_EIOS <- sens_EIOS / length(alarm_EIOS[state_EIOS == TRUE])
+  sens_EIOS_CI <- binom.confint(sum(alarm_EIOS[state_EIOS == TRUE], na.rm = TRUE), length(alarm_EIOS[state_EIOS == TRUE]), method = "exact")
   
   sens_per_week_list$country[i] <- country_list[i]
   sens_per_week_list$sens_HM[i] <- sens_HM
   sens_per_week_list$sens_EIOS[i] <- sens_EIOS
+  sens_per_week_list$CI_HM_lower[i] <- sens_HM_CI$lower
+  sens_per_week_list$CI_HM_upper[i] <- sens_HM_CI$upper
+  sens_per_week_list$CI_EIOS_lower[i] <- sens_EIOS_CI$lower
+  sens_per_week_list$CI_EIOS_upper[i] <- sens_EIOS_CI$upper
 }
 
 sens_per_week <- data.frame(sens_per_week_list$country, sens_per_week_list$sens_HM, sens_per_week_list$sens_EIOS)
@@ -316,6 +326,8 @@ ggplot(sens_exact_long, aes(x = country, y = exact_sensitivity * 100, fill = sou
   scale_fill_brewer(palette = "Set1")
 ggsave(filename = "all_countries_sens_exact.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic")
 
+binom.confint(x = sens_exact$no_HM, n = sens_exact$no_FluNet_for_HM, method = "exact")
+binom.confint(x = sens_exact$no_EIOS, n = sens_exact$no_FluNet_for_EIOS, method = "exact")
 
 ##### positive predictive value per week #####
 PPV_list <- vector(mode = "list")
@@ -331,15 +343,21 @@ for(i in seq_along(country_list)){
   alarm_HM <- HM_temp$epidemic
   TP_HM <- sum(alarm_HM[state_HM == TRUE], na.rm = TRUE)
   PPV_HM <- TP_HM / sum(alarm_HM, na.rm = TRUE)
+  PPV_HM_CI <- binom.confint(TP_HM, sum(alarm_HM, na.rm = TRUE), methods = "exact")
   
   state_EIOS <- FluNet_EIOS_temp$epidemic
   alarm_EIOS <- EIOS_temp$epidemic
   TP_EIOS <- sum(alarm_EIOS[state_EIOS == TRUE], na.rm = TRUE)
   PPV_EIOS <- TP_EIOS / sum(alarm_EIOS, na.rm = TRUE)
+  PPV_EIOS_CI <- binom.confint(TP_EIOS, sum(alarm_EIOS, na.rm = TRUE), methods = "exact")
   
   PPV_list$country[i] <- country_list[i]
   PPV_list$PPV_HM[i] <- PPV_HM
   PPV_list$PPV_EIOS[i] <- PPV_EIOS
+  PPV_list$PPV_HM_CI_lower[i] <- PPV_HM_CI$lower
+  PPV_list$PPV_EIOS_CI_lower[i] <- PPV_EIOS_CI$lower
+  PPV_list$PPV_HM_CI_upper[i] <- PPV_HM_CI$upper
+  PPV_list$PPV_EIOS_CI_upper[i] <- PPV_EIOS_CI$upper
 }
 
 PPV <- data.frame(PPV_list$country, PPV_list$PPV_HM, PPV_list$PPV_EIOS)
@@ -373,16 +391,24 @@ for(i in seq_along(country_list)){
   alarm_HM <- HM_temp$epidemic
   TN_HM <- sum(alarm_HM[state_HM == FALSE] == FALSE, na.rm = TRUE)
   NPV_HM <- TN_HM / sum(alarm_HM == FALSE, na.rm = TRUE)
+  NPV_HM_CI <- binom.confint(TN_HM, sum(alarm_HM == FALSE, na.rm = TRUE), methods = "exact")
   
   state_EIOS <- FluNet_EIOS_temp$epidemic
   alarm_EIOS <- EIOS_temp$epidemic
   TN_EIOS <- sum(alarm_EIOS[state_EIOS == FALSE] == FALSE, na.rm = TRUE)
   NPV_EIOS <- TN_EIOS / sum(alarm_EIOS == FALSE, na.rm = TRUE)
+  NPV_EIOS_CI <- binom.confint(TN_EIOS, sum(alarm_EIOS == FALSE, na.rm = TRUE), methods = "exact")
+  
   
   NPV_list$country[i] <- country_list[i]
   NPV_list$NPV_HM[i] <- NPV_HM
   NPV_list$NPV_EIOS[i] <- NPV_EIOS
+  NPV_list$NPV_HM_CI_lower[i] <- NPV_HM_CI$lower
+  NPV_list$NPV_EIOS_CI_lower[i] <- NPV_EIOS_CI$lower
+  NPV_list$NPV_HM_CI_upper[i] <- NPV_HM_CI$upper
+  NPV_list$NPV_EIOS_CI_upper[i] <- NPV_EIOS_CI$upper
 }
+
 
 NPV <- data.frame(NPV_list$country, NPV_list$NPV_HM, NPV_list$NPV_EIOS)
 names(NPV) <- c("country", "NPV_HM", "NPV_EIOS")
@@ -418,15 +444,21 @@ for(i in seq_along(country_list)){
   alarm_HM <- HM_temp$epidemic
   FA_HM <- sum(alarm_HM[state_HM == FALSE], na.rm = TRUE)
   FAR_HM <- FA_HM / length(alarm_HM[state_HM == FALSE])
+  FAR_HM_CI <- binom.confint(FAR_HM, length(alarm_HM[state_HM == FALSE]), methods = "exact")
   
   state_EIOS <- FluNet_EIOS_temp$epidemic
   alarm_EIOS <- EIOS_temp$epidemic
   FA_EIOS <- sum(alarm_EIOS[state_EIOS == FALSE], na.rm = TRUE)
   FAR_EIOS <- FA_EIOS / length(alarm_EIOS[state_EIOS == FALSE])
+  FAR_EIOS_CI <- binom.confint(FAR_EIOS, length(alarm_EIOS[state_EIOS == FALSE]), methods = "exact")
   
   false_alarm_rate$country[i] <- country_list[i]
   false_alarm_rate$FAR_HM[i] <- FAR_HM
   false_alarm_rate$FAR_EIOS[i] <- FAR_EIOS
+  false_alarm_rate$FAR_HM_CI_lower[i] <- FAR_HM_CI$lower
+  false_alarm_rate$FAR_HM_CI_upper[i] <- FAR_HM_CI$upper
+  false_alarm_rate$FAR_EIOS_CI_lower[i] <- FAR_EIOS_CI$lower
+  false_alarm_rate$FAR_EIOS_CI_upper[i] <- FAR_EIOS_CI$upper
 }
 
 FAR <- data.frame(false_alarm_rate$country, false_alarm_rate$FAR_HM, false_alarm_rate$FAR_EIOS)
@@ -488,6 +520,9 @@ for(i in seq_along(country_list)){
   }
   timeliness_HM$country[i] <- country_list[i]
   timeliness_HM$timeliness[i] <- mean(prevented, na.rm = TRUE)
+  timeliness_HM$time_CI_lower[i] <- mean(prevented, na.rm = TRUE) - 1.96*sd(prevented)/sqrt(length(prevented))
+  timeliness_HM$time_CI_upper[i] <- mean(prevented, na.rm = TRUE) + 1.96*sd(prevented)/sqrt(length(prevented))
+  
 }  
 
 for(i in seq_along(country_list)){
@@ -515,6 +550,9 @@ for(i in seq_along(country_list)){
   }
   timeliness_EIOS$country[i] <- country_list[i]
   timeliness_EIOS$timeliness[i] <- mean(prevented, na.rm = TRUE)
+  timeliness_EIOS$time_CI_lower <- mean(prevented, na.rm = TRUE) - 1.96*sd(prevented)/sqrt(length(prevented))
+  timeliness_EIOS$time_CI_upper <- mean(prevented, na.rm = TRUE) + 1.96*sd(prevented)/sqrt(length(prevented))
+  
 } 
 
 timeliness <- data.frame(timeliness_HM$country, timeliness_HM$timeliness, timeliness_EIOS$timeliness)
@@ -627,16 +665,22 @@ for(i in seq_along(country_list)){
   TP_HM <- sum(alarm_HM[state_HM == TRUE], na.rm = TRUE)
   TN_HM <- sum(alarm_HM[state_HM == FALSE] == FALSE, na.rm = TRUE)
   accuracy_HM <- (TP_HM + TN_HM)/nrow(HM_temp)
+  accuracy_HM_CI <- binom.confint(TP_HM + TN_HM, nrow(HM_temp), methods = "exact")
   
   state_EIOS <- FluNet_EIOS_temp$epidemic
   alarm_EIOS <- EIOS_temp$epidemic
   TP_EIOS <- sum(alarm_EIOS[state_EIOS == TRUE], na.rm = TRUE)
   TN_EIOS <- sum(alarm_EIOS[state_EIOS == FALSE] == FALSE, na.rm = TRUE)
   accuracy_EIOS <- (TP_EIOS + TN_EIOS)/nrow(EIOS_temp)
+  accuracy_EIOS_CI <- binom.confint(TP_EIOS + TN_EIOS, nrow(EIOS_temp), methods = "exact")
   
   accuracy_list$country[i] <- country_list[i]
   accuracy_list$accuracy_HM[i] <- accuracy_HM
   accuracy_list$accuracy_EIOS[i] <- accuracy_EIOS
+  accuracy_list$accuracy_HM_CI_lower[i] <- accuracy_HM_CI$lower
+  accuracy_list$accuracy_HM_CI_upper[i] <- accuracy_HM_CI$upper
+  accuracy_list$accuracy_EIOS_CI_lower[i] <- accuracy_EIOS_CI$lower
+  accuracy_list$accuracy_EIOS_CI_upper[i] <- accuracy_EIOS_CI$upper
 }
 
 accuracy <- data.frame(accuracy_list$country, accuracy_list$accuracy_HM, accuracy_list$accuracy_EIOS)
