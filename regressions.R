@@ -1,11 +1,10 @@
 library(ggplot2)
 library(lubridate)
-library(gamlss)
 library(dplyr)
 library(tidyr)
 library(RColorBrewer)
 library(readxl)
-
+library(gvlma)
 
 metrics <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/metrics.csv", stringsAsFactors = TRUE)
 metrics$false_alarm_rate <- 1 - metrics$specificity
@@ -26,7 +25,7 @@ metrics_HM <- filter(met_ind, source == "HealthMap") %>%
             influenza_transmission_zone, ISO, problematic_FluNet, problematic_EIOS, problematic_HM, language)) %>% 
   mutate(latitude = abs(latitude), HM_total = log(HM_total), HM_max = log(HM_max))
 # set Nigeria to NA for sens_per_outbreak and frac_prevented because it is an outlier and distorts the regressions
-metrics_HM[metrics_HM$country == "Nigeria", c(3, 8)] <- NA
+# metrics_HM[metrics_HM$country == "Nigeria", c(3, 8)] <- NA
 
 metrics_EIOS <- filter(met_ind, source == "EIOS") %>% 
   select(-c(X.x, X.y, FluNet_total_cat, FluNet_total, FluNet_max, HM_total_cat, HM_total, HM_max, ISO, 
@@ -37,251 +36,8 @@ metrics_EIOS <- filter(met_ind, source == "EIOS") %>%
 
 country_list <- levels(met_ind$country)
 
-# list of all predictors
-pred_EIOS <- names(metrics_EIOS)[10:19]
-pred_HM <- names(metrics_HM)[10:19]
 
-##### univariable regressions#####
-### EIOS
-coef <- c(1, 2, 5, 7, 9, 10, seq(from = 13, to = 23, by = 2))
-pval <- c(3, 4, 6, 8, 11, 12, seq(from = 14, to = 24, by = 2))
-# sensitivity per outbreak
-lm_EIOS_sensOB <- lapply(10:19, function(x) lm(metrics_EIOS$sens_per_outbreak ~ metrics_EIOS[,x]))
-names(lm_EIOS_sensOB) <- names(metrics_EIOS)[10:19]
-lm_EIOS_sensOB_summary <- lapply(lm_EIOS_sensOB, summary)
-lm_EIOS_sensOB_coef_list <- lapply(lm_EIOS_sensOB_summary, function(x) x$coefficients[-1, c(1,4)])
-lm_EIOS_sensOB_coef_vec <- unlist(lm_EIOS_sensOB_coef_list)
-lm_EIOS_sensOB_coef <- data.frame("coefficient" = lm_EIOS_sensOB_coef_vec[coef], "p-value" = lm_EIOS_sensOB_coef_vec[pval])
-row.names(lm_EIOS_sensOB_coef) <- c("EIOS_total_cat.L", "EIOS_total_cat.Q", "EIOS_total", "EIOS_max", "global_region.temp_South", 
-                                  "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", "TIU.2017")
-round(lm_EIOS_sensOB_coef, 3)
-
-lm_EIOS_sensOB_R2 <- unlist(lapply(lm_EIOS_sensOB_summary, function(x) x$r.squared))
-lm_EIOS_sensOB_R2
-
-par(mfrow = c(2, 2))
-sapply(lm_EIOS_sensOB, plot)
-
-# exact sensitivity 
-lm_EIOS_sens_exact <- lapply(10:19, function(x) lm(metrics_EIOS$sens_exact ~ metrics_EIOS[,x]))
-lm_EIOS_sens_exact_summary <- lapply(lm_EIOS_sens_exact, summary)
-lm_EIOS_sens_exact_coef_list <- lapply(lm_EIOS_sens_exact_summary, function(x) x$coefficients[-1, c(1,4)])
-lm_EIOS_sens_exact_coef_vec <- unlist(lm_EIOS_sens_exact_coef_list)
-lm_EIOS_sens_exact_coef <- data.frame("coefficient" = lm_EIOS_sens_exact_coef_vec[coef], "p-value" = lm_EIOS_sens_exact_coef_vec[pval])
-row.names(lm_EIOS_sens_exact_coef) <- c("EIOS_total_cat.L", "EIOS_total_cat.Q", "EIOS_total", "EIOS_max", "global_region.temp_South", 
-                                  "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", "TIU.2017")
-round(lm_EIOS_sens_exact_coef, 3)
-
-lm_EIOS_sens_exact_R2 <- unlist(lapply(lm_EIOS_sens_exact_summary, function(x) x$r.squared))
-names(lm_EIOS_sens_exact_R2) <- pred_EIOS
-lm_EIOS_sens_exact_R2
-
-par(mfrow = c(2, 2))
-sapply(lm_EIOS_sens_exact, plot)  
-
-
-zinf_EIOS_sens_exact <- lapply(10:19, function(x) gamlss(metrics_EIOS$sens_exact ~ metrics_EIOS[,x], family = "BEZI",
-                                                         trace = F))
-zinf_EIOS_sens_exact_summary <- lapply(zinf_EIOS_sens_exact, summary)
-zinf_EIOS_sens_exact_coef <- sapply(zinf_EIOS_sens_exact_summary, '[', ,1)
-zinf_EIOS_sens_exact_coef <- unlist(zinf_EIOS_sens_exact_coef)
-zinf_EIOS_sens_exact_coef <- zinf_EIOS_sens_exact_coef[!grepl(x = names(zinf_EIOS_sens_exact_coef), pattern = "Intercept")]
-zinf_EIOS_sens_exact_pval <- sapply(zinf_EIOS_sens_exact_summary, '[', ,4)
-zinf_EIOS_sens_exact_pval <- unlist(zinf_EIOS_sens_exact_pval)
-zinf_EIOS_sens_exact_pval <- zinf_EIOS_sens_exact_pval[!grepl(x = names(zinf_EIOS_sens_exact_pval), pattern = "Intercept")]
-
-zinf_EIOS_sens_exact_df <- data.frame("coefficient" = zinf_EIOS_sens_exact_coef, "p-value" = zinf_EIOS_sens_exact_pval)
-row.names(zinf_EIOS_sens_exact_df) <- c("EIOS_total_cat.L", "EIOS_total_cat.Q", "EIOS_total", "EIOS_max", "global_region.temp_South", 
-                                        "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", "TIU.2017")
-
-
-# sensitivity per week
-lm_EIOS_sens_week <- lapply(10:19, function(x) lm(metrics_EIOS$sens_per_week ~ metrics_EIOS[,x]))
-lm_EIOS_sens_week_summary <- lapply(lm_EIOS_sens_week, summary)
-lm_EIOS_sens_week_coef_list <- lapply(lm_EIOS_sens_week_summary, function(x) x$coefficients[-1, c(1,4)])
-lm_EIOS_sens_week_coef_vec <- unlist(lm_EIOS_sens_week_coef_list)
-lm_EIOS_sens_week_coef <- data.frame("coefficient" = lm_EIOS_sens_week_coef_vec[coef], "p-value" = lm_EIOS_sens_week_coef_vec[pval])
-row.names(lm_EIOS_sens_week_coef) <- c("EIOS_total_cat.L", "EIOS_total_cat.Q", "EIOS_total", "EIOS_max", "global_region.temp_South", 
-                                      "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", "TIU.2017")
-round(lm_EIOS_sens_week_coef, 3)
-
-lm_EIOS_sens_week_R2 <- unlist(lapply(lm_EIOS_sens_week_summary, function(x) x$r.squared))
-names(lm_EIOS_sens_week_R2) <- pred_EIOS
-lm_EIOS_sens_week_R2
-
-par(mfrow = c(2, 2))
-sapply(lm_EIOS_sens_week, plot) 
-
-
-# specificity 
-lm_EIOS_spec <- lapply(10:19, function(x) lm(metrics_EIOS$specificity ~ metrics_EIOS[,x]))
-lm_EIOS_spec_summary <- lapply(lm_EIOS_spec, summary)
-lm_EIOS_spec_coef_list <- lapply(lm_EIOS_spec_summary, function(x) x$coefficients[-1, c(1,4)])
-lm_EIOS_spec_coef_vec <- unlist(lm_EIOS_spec_coef_list)
-lm_EIOS_spec_coef <- data.frame("coefficient" = lm_EIOS_spec_coef_vec[coef], "p-value" = lm_EIOS_spec_coef_vec[pval])
-row.names(lm_EIOS_spec_coef) <- c("EIOS_total_cat.L", "EIOS_total_cat.Q", "EIOS_total", "EIOS_max", "global_region.temp_South", 
-                                     "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", "TIU.2017")
-round(lm_EIOS_spec_coef, 5)
-
-lm_EIOS_spec_R2 <- unlist(lapply(lm_EIOS_spec_summary, function(x) x$r.squared))
-names(lm_EIOS_spec_R2) <- pred_EIOS
-lm_EIOS_spec_R2
-
-par(mfrow = c(2, 2))
-sapply(lm_EIOS_spec, plot) 
-
-
-# timeliness
-lm_EIOS_frac_prev <- lapply(10:19, function(x) lm(metrics_EIOS$frac_prevented ~ metrics_EIOS[,x]))
-lm_EIOS_frac_prev_summary <- lapply(lm_EIOS_frac_prev, summary)
-lm_EIOS_frac_prev_coef_list <- lapply(lm_EIOS_frac_prev_summary, function(x) x$coefficients[-1, c(1,4)])
-lm_EIOS_frac_prev_coef_vec <- unlist(lm_EIOS_frac_prev_coef_list)
-lm_EIOS_frac_prev_coef <- data.frame("coefficient" = lm_EIOS_frac_prev_coef_vec[coef], "p-value" = lm_EIOS_frac_prev_coef_vec[pval])
-row.names(lm_EIOS_frac_prev_coef) <- c("EIOS_total_cat.L", "EIOS_total_cat.Q", "EIOS_total", "EIOS_max", "global_region.temp_South", 
-                                "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", "TIU.2017")
-round(lm_EIOS_frac_prev_coef, 3)
-
-lm_EIOS_frac_prev_R2 <- unlist(lapply(lm_EIOS_frac_prev_summary, function(x) x$r.squared))
-names(lm_EIOS_frac_prev_R2) <- pred_EIOS
-lm_EIOS_frac_prev_R2
-
-par(mfrow = c(2, 2))
-sapply(lm_EIOS_frac_prev, plot) 
-
-
-# PPV
-lm_EIOS_PPV <- lapply(10:19, function(x) lm(metrics_EIOS$PPV ~ metrics_EIOS[,x]))
-lm_EIOS_PPV_summary <- lapply(lm_EIOS_PPV, summary)
-lm_EIOS_PPV_coef_list <- lapply(lm_EIOS_PPV_summary, function(x) x$coefficients[-1, c(1,4)])
-lm_EIOS_PPV_coef_vec <- unlist(lm_EIOS_PPV_coef_list)
-lm_EIOS_PPV_coef <- data.frame("coefficient" = lm_EIOS_PPV_coef_vec[coef], "p-value" = lm_EIOS_PPV_coef_vec[pval])
-row.names(lm_EIOS_PPV_coef) <- c("EIOS_total_cat.L", "EIOS_total_cat.Q", "EIOS_total", "EIOS_max", "global_region.temp_South", 
-                                "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", "TIU.2017")
-round(lm_EIOS_PPV_coef, 3)
-
-lm_EIOS_PPV_R2 <- unlist(lapply(lm_EIOS_PPV_summary, function(x) x$r.squared))
-names(lm_EIOS_PPV_R2) <- pred_EIOS
-lm_EIOS_PPV_R2
-
-par(mfrow = c(2, 2))
-sapply(lm_EIOS_PPV, plot) 
-
-
-
-
-### HealthMap
-# sensitivity per outbreak
-lm_HM_sensOB <- lapply(10:20, function(x) lm(metrics_HM$sens_per_outbreak ~ metrics_HM[,x]))
-lm_HM_sensOB_summary <- lapply(lm_HM_sensOB, summary)
-
-lm_HM_sensOB_coef_list <- lapply(lm_HM_sensOB_summary, function(x) x$coefficients[-1, c(1,4)])
-lm_HM_sensOB_coef_list <- lapply(lm_HM_sensOB_summary, '[[', "coefficients")
-names(lm_HM_sensOB_coef_list) <- names(metrics_HM[10:20])
-lm_HM_sensOB_coef_df <- do.call("rbind", lapply(lm_HM_sensOB_coef_list, as.data.frame))
-lm_HM_sensOB_coef_df <- lm_HM_sensOB_coef_df[-grep("Intercept", rownames(lm_HM_sensOB_coef_df)), ]
-
-row.names(lm_HM_sensOB_coef) <- c("HM_total_cat.L", "HM_total_cat.Q", "HM_total", "HM_max", "global_region.temp_South", 
-                                  "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", "TIU.2017")
-round(lm_HM_sensOB_coef, 3)
-
-lm_HM_sensOB_R2 <- unlist(lapply(lm_HM_sensOB_summary, function(x) x$r.squared))
-names(lm_HM_sensOB_R2) <- pred_HM
-lm_HM_sensOB_R2
-
-par(mfrow = c(2, 2))
-sapply(lm_HM_sensOB, plot)
-
-# exact sensitivity 
-lm_HM_sens_exact <- lapply(10:19, function(x) lm(metrics_HM$sens_exact ~ metrics_HM[,x]))
-lm_HM_sens_exact_summary <- lapply(lm_HM_sens_exact, summary)
-lm_HM_sens_exact_coef_list <- lapply(lm_HM_sens_exact_summary, function(x) x$coefficients[-1, c(1,4)])
-lm_HM_sens_exact_coef_vec <- unlist(lm_HM_sens_exact_coef_list)
-lm_HM_sens_exact_coef <- data.frame("coefficient" = lm_HM_sens_exact_coef_vec[coef], "p-value" = lm_HM_sens_exact_coef_vec[pval])
-row.names(lm_HM_sens_exact_coef) <- c("HM_total_cat.L", "HM_total_cat.Q", "HM_total", "HM_max", "global_region.temp_South", 
-                                      "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", "TIU.2017")
-round(lm_HM_sens_exact_coef, 3)
-
-lm_HM_sens_exact_R2 <- unlist(lapply(lm_HM_sens_exact_summary, function(x) x$r.squared))
-names(lm_HM_sens_exact_R2) <- pred_HM
-lm_HM_sens_exact_R2
-
-par(mfrow = c(2, 2))
-sapply(lm_HM_sens_exact, plot)  
-
-
-# sensitivity per week
-lm_HM_sens_week <- lapply(10:19, function(x) lm(metrics_HM$sens_per_week ~ metrics_HM[,x]))
-lm_HM_sens_week_summary <- lapply(lm_HM_sens_week, summary)
-lm_HM_sens_week_coef_list <- lapply(lm_HM_sens_week_summary, function(x) x$coefficients[-1, c(1,4)])
-lm_HM_sens_week_coef_vec <- unlist(lm_HM_sens_week_coef_list)
-lm_HM_sens_week_coef <- data.frame("coefficient" = lm_HM_sens_week_coef_vec[coef], "p-value" = lm_HM_sens_week_coef_vec[pval])
-row.names(lm_HM_sens_week_coef) <- c("HM_total_cat.L", "HM_total_cat.Q", "HM_total", "HM_max", "global_region.temp_South", 
-                                     "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", "TIU.2017")
-round(lm_HM_sens_week_coef, 3)
-
-lm_HM_sens_week_R2 <- unlist(lapply(lm_HM_sens_week_summary, function(x) x$r.squared))
-names(lm_HM_sens_week_R2) <- pred_HM
-lm_HM_sens_week_R2
-
-par(mfrow = c(2, 2))
-sapply(lm_HM_sens_week, plot) 
-
-
-# specificity 
-lm_HM_spec <- lapply(10:19, function(x) lm(log(metrics_HM$specificity) ~ metrics_HM[,x]))
-lm_HM_spec_summary <- lapply(lm_HM_spec, summary)
-lm_HM_spec_coef_list <- lapply(lm_HM_spec_summary, function(x) x$coefficients[-1, c(1,4)])
-lm_HM_spec_coef_vec <- unlist(lm_HM_spec_coef_list)
-lm_HM_spec_coef <- data.frame("coefficient" = lm_HM_spec_coef_vec[coef], "p-value" = lm_HM_spec_coef_vec[pval])
-row.names(lm_HM_spec_coef) <- c("HM_total_cat.L", "HM_total_cat.Q", "HM_total", "HM_max", "global_region.temp_South", 
-                                "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", "TIU.2017")
-round(lm_HM_spec_coef, 3)
-
-lm_HM_spec_R2 <- unlist(lapply(lm_HM_spec_summary, function(x) x$r.squared))
-names(lm_HM_spec_R2) <- pred_HM
-lm_HM_spec_R2
-
-par(mfrow = c(2, 2))
-sapply(lm_HM_spec, plot) 
-
-
-# timeliness
-lm_HM_frac_prev <- lapply(10:19, function(x) lm(metrics_HM$frac_prevented ~ metrics_HM[,x]))
-lm_HM_frac_prev_summary <- lapply(lm_HM_frac_prev, summary)
-lm_HM_frac_prev_coef_list <- lapply(lm_HM_frac_prev_summary, function(x) x$coefficients[-1, c(1,4)])
-lm_HM_frac_prev_coef_vec <- unlist(lm_HM_frac_prev_coef_list)
-lm_HM_frac_prev_coef <- data.frame("coefficient" = lm_HM_frac_prev_coef_vec[coef], "p-value" = lm_HM_frac_prev_coef_vec[pval])
-row.names(lm_HM_frac_prev_coef) <- c("HM_total_cat.L", "HM_total_cat.Q", "HM_total", "HM_max", "global_region.temp_South", 
-                                     "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", "TIU.2017")
-round(lm_HM_frac_prev_coef, 3)
-
-lm_HM_frac_prev_R2 <- unlist(lapply(lm_HM_frac_prev_summary, function(x) x$r.squared))
-names(lm_HM_frac_prev_R2) <- pred_HM
-lm_HM_frac_prev_R2
-
-par(mfrow = c(2, 2))
-sapply(lm_HM_frac_prev, plot) 
-
-
-# PPV
-lm_HM_PPV <- lapply(10:19, function(x) lm(metrics_HM$PPV ~ metrics_HM[,x]))
-lm_HM_PPV_summary <- lapply(lm_HM_PPV, summary)
-lm_HM_PPV_coef_list <- lapply(lm_HM_PPV_summary, function(x) x$coefficients[-1, c(1,4)])
-lm_HM_PPV_coef_vec <- unlist(lm_HM_PPV_coef_list)
-lm_HM_PPV_coef <- data.frame("coefficient" = lm_HM_PPV_coef_vec[coef], "p-value" = lm_HM_PPV_coef_vec[pval])
-row.names(lm_HM_PPV_coef) <- c("HM_total_cat.L", "HM_total_cat.Q", "HM_total", "HM_max", "global_region.temp_South", 
-                               "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", "TIU.2017")
-round(lm_HM_PPV_coef, 3)
-
-lm_HM_PPV_R2 <- unlist(lapply(lm_HM_PPV_summary, function(x) x$r.squared))
-names(lm_HM_PPV_R2) <- pred_HM
-lm_HM_PPV_R2
-
-par(mfrow = c(2, 2))
-sapply(lm_HM_PPV, plot) 
-
-
-##### short univariable regressions #####
+##### univariable regressions #####
 
 reg.fun <- function(x, y, df){
   reg <- vector(mode = "list", length = 6)
@@ -329,8 +85,10 @@ reg_HM_confint_df <- reg_HM_confint_df %>% unite(col = "confint_95", sep = " - "
 reg_summary_HM <- reg.summary(x = predictors, y = outcomes, df = metrics_HM)
 
 reg_HM_coef_list <- vector(mode = "list")
+reg_HM_rsqu_list <- vector(mode = "list")
 for(i in 1:6){
   reg_HM_coef_list[[i]] <- do.call("rbind", reg_summary_HM[[i]][4, 1:11])
+  reg_HM_rsqu_list[[i]] <- do.call("rbind", reg_summary_HM[[i]][8, 1:11])
 }
 
 reg_HM_coef_df <- do.call("rbind", lapply(reg_HM_coef_list, as.data.frame))
@@ -341,7 +99,10 @@ rownames(reg_HM_coef_df) <- paste(rep(c("HM_total_cat.L", "HM_total_cat.Q", "HM_
                                         "TIU.2017", "HM_filter_lang"), 6), rep(names(metrics_HM)[3:8], each = 13), sep = ".")
 
 write.csv(reg_HM_coef_df, "univariable regressions HM.csv")
+write.csv(unlist(reg_HM_rsqu_list), "univariabe regressions HM rsquared.csv", row.names = FALSE)
 
+lapply(reg_list_HM[[1]], plot)
+lapply(reg_list_HM[[1]], gvlma)
 
 
 ## EIOS ## 
@@ -364,8 +125,10 @@ reg_EIOS_confint_df <- reg_EIOS_confint_df %>% unite(col = "confint_95", sep = "
 reg_summary_EIOS <- reg.summary(x = predictors, y = outcomes, df = metrics_EIOS)
 
 reg_EIOS_coef_list <- vector(mode = "list")
+reg_EIOS_rsqu_list <- vector(mode = "list")
 for(i in 1:6){
   reg_EIOS_coef_list[[i]] <- do.call("rbind", reg_summary_EIOS[[i]][4, 1:10])
+  reg_EIOS_rsqu_list[[i]] <- do.call("rbind", reg_summary_EIOS[[i]][8, 1:10])
 }
 
 reg_EIOS_coef_df <- do.call("rbind", lapply(reg_EIOS_coef_list, as.data.frame))
@@ -376,6 +139,27 @@ rownames(reg_EIOS_coef_df) <- paste(rep(c("EIOS_total_cat.L", "EIOS_total_cat.Q"
                                         "TIU.2017"), 6), rep(names(metrics_EIOS)[3:8], each = 12), sep = ".")
 
 write.csv(reg_EIOS_coef_df, "univariable regressions EIOS.csv")
+write.csv(unlist(reg_EIOS_rsqu_list), "univariabe regressions EIOS rsquared.csv", row.names = FALSE)
+
+lapply(reg_list_EIOS[[1]], plot)
+lapply(reg_list_EIOS[[1]], gvlma)
+
+
+zinf_EIOS_sens_exact <- lapply(10:19, function(x) gamlss(metrics_EIOS$sens_exact ~ metrics_EIOS[,x], family = "BEZI",
+                                                         trace = F))
+zinf_EIOS_sens_exact_summary <- lapply(zinf_EIOS_sens_exact, summary)
+zinf_EIOS_sens_exact_coef <- sapply(zinf_EIOS_sens_exact_summary, '[', ,1)
+zinf_EIOS_sens_exact_coef <- unlist(zinf_EIOS_sens_exact_coef)
+zinf_EIOS_sens_exact_coef <- zinf_EIOS_sens_exact_coef[!grepl(x = names(zinf_EIOS_sens_exact_coef), pattern = "Intercept")]
+zinf_EIOS_sens_exact_pval <- sapply(zinf_EIOS_sens_exact_summary, '[', ,4)
+zinf_EIOS_sens_exact_pval <- unlist(zinf_EIOS_sens_exact_pval)
+zinf_EIOS_sens_exact_pval <- zinf_EIOS_sens_exact_pval[!grepl(x = names(zinf_EIOS_sens_exact_pval), pattern = "Intercept")]
+
+zinf_EIOS_sens_exact_df <- data.frame("coefficient" = zinf_EIOS_sens_exact_coef, "p-value" = zinf_EIOS_sens_exact_pval)
+row.names(zinf_EIOS_sens_exact_df) <- c("EIOS_total_cat.L", "EIOS_total_cat.Q", "EIOS_total", "EIOS_max", "global_region.temp_South", 
+                                        "global_region.tropical", "English", "HDI.2018", "abs.latitude", "longitude", "PFI.2018", "TIU.2017")
+
+
 
 
 #### regressions with interactions #####
@@ -521,59 +305,13 @@ names(lm_EIOS_PPV_int_pval)[lm_EIOS_PPV_int_pval < 0.05]
 
 
 
-##### multivariable regressions #####
-
-### HealthMap
-lm_HM_multi <- lapply(3:8, function(x) lm(metrics_HM[,x] ~ metrics_HM$HM_total_cat + metrics_HM$global_region + metrics_HM$english + 
-                                          metrics_HM$HDI.2018 + metrics_HM$latitude))
-lm_HM_multi_summary <- lapply(lm_HM_multi, summary)
-names(lm_HM_multi_summary) <- names(metrics_HM)[3:8]
-lm_HM_multi_coef <- lapply(lm_HM_multi_summary, '[[', "coefficients")
-
-# step function based on AIC to select best model
-lm_HM_multi_step <- lapply(lapply(lm_HM_multi, step), summary)
-lm_HM_multi_step_coef <- lapply(lm_HM_multi_step, '[[', "coefficients")
-names(lm_HM_multi_step_coef) <- names(metrics_HM)[3:8]
-lm_HM_multi_step_coef
-
-lm_HM_multi_step_R2 <- sapply(lm_HM_multi_step, '[[', "r.squared")
-names(lm_HM_multi_step_R2) <- names(metrics_HM)[3:8]
-lm_HM_multi_step_R2
-
-lm_HM_multi_step_adjR2 <- sapply(lm_HM_multi_step, '[[', "adj.r.squared")
-names(lm_HM_multi_step_adjR2) <- names(metrics_HM)[3:8]
-lm_HM_multi_step_adjR2
-
-
-### EIOS
-lm_EIOS_multi <- lapply(3:8, function(x) lm(metrics_EIOS[,x] ~ metrics_EIOS$EIOS_total_cat + metrics_EIOS$global_region + metrics_EIOS$english + 
-                                            metrics_EIOS$HDI.2018 + metrics_EIOS$latitude))
-lm_EIOS_multi_summary <- lapply(lm_EIOS_multi, summary)
-names(lm_EIOS_multi_summary) <- names(metrics_EIOS)[3:8]
-lm_EIOS_multi_coef <- lapply(lm_EIOS_multi_summary, '[[', "coefficients")
-
-# step function based on AIC to select best model
-lm_EIOS_multi_step <- lapply(lapply(lm_EIOS_multi, step), summary)
-lm_EIOS_multi_step_coef <- lapply(lm_EIOS_multi_step, '[[', "coefficients")
-names(lm_EIOS_multi_step_coef) <- names(metrics_EIOS)[3:8]
-lm_EIOS_multi_step_coef
-
-lm_EIOS_multi_step_R2 <- sapply(lm_EIOS_multi_step, '[[', "r.squared")
-names(lm_EIOS_multi_step_R2) <- names(metrics_EIOS)[3:8]
-lm_EIOS_multi_step_R2
-
-lm_EIOS_multi_step_adjR2 <- sapply(lm_EIOS_multi_step, '[[', "adj.r.squared")
-names(lm_EIOS_multi_step_adjR2) <- names(metrics_EIOS)[3:8]
-lm_EIOS_multi_step_adjR2
-
-
-#### advanced variable selection ####
+#### multivariable models: advanced variable selection ####
 library(caret)
 library(leaps)
 library(MASS)
 library(relaimpo)
 library(car)
-library(gvlma)
+
 
 full_model_HM_sensOB <- lm(sens_per_outbreak ~ HM_total_cat + HM_total + HM_max + global_region + english + 
                              HDI.2018 + latitude + longitude + PFI.2018 + TIU.2017 + HM_filter_lang, 
@@ -746,4 +484,89 @@ vif(full_model_HM_sensOB)
 sqrt(vif((full_model_HM_sensOB)))
 
 crPlots(full_model_HM_sensOB)
+
+
+
+##### sens_exact:logistic regression ####
+#HealthMap
+metrics_HM <- metrics_HM %>% mutate(sens_exact_cat = ifelse(sens_exact == 0, 0 , 1))
+glm_HM_sens_exact <- lapply(10:20, function(x) glm(metrics_HM$sens_exact_cat ~ metrics_HM[, x], 
+                                                   family = binomial(link = "logit")))
+glm_HM_sens_exact_summary <- lapply(glm_HM_sens_exact, summary)
+glm_HM_sens_exact_coefs <- lapply(glm_HM_sens_exact_summary, '[[', "coefficients")
+names(glm_HM_sens_exact_coefs) <- names(metrics_HM)[10:20]
+glm_HM_sens_exact_coef_df <- do.call("rbind", lapply(glm_HM_sens_exact_coefs, as.data.frame))
+glm_HM_sens_exact_coef_df <- glm_HM_sens_exact_coef_df[-grep("Intercept", rownames(glm_HM_sens_exact_coef_df)), ]
+glm_HM_sens_exact_coef_df$exp.Estimate <- exp(glm_HM_sens_exact_coef_df$Estimate)
+
+glm_HM_sens_exact_confint <- lapply(glm_HM_sens_exact, confint)
+names(glm_HM_sens_exact_confint) <- names(metrics_HM)[10:20]
+glm_HM_sens_exact_confint_df <- do.call("rbind", lapply(glm_HM_sens_exact_confint, as.data.frame))
+glm_HM_sens_exact_confint_df <- glm_HM_sens_exact_confint_df[-grep("Intercept", rownames(glm_HM_sens_exact_confint_df)), ]
+glm_HM_sens_exact_confint_df <- apply(glm_HM_sens_exact_confint_df, 2, exp) %>% as.data.frame()
+glm_HM_sens_exact_confint_df <- round(glm_HM_sens_exact_confint_df, 4) %>% unite(col = "95%_confint", sep = " - ", remove = TRUE)
+
+glm_HM_sens_exact_coef_df$exp.confint <- glm_HM_sens_exact_confint_df$`95%_confint`
+write.csv(glm_HM_sens_exact_coef_df, "reg_coefs_sens_exact_HM_univariable.csv", quote = FALSE)
+
+
+# multivariable
+glm_HM_sens_exact_multi <- glm(sens_exact_cat ~ HM_total + global_region + english + HDI.2018 + latitude + 
+                                 PFI.2018 + HM_filter_lang, 
+                               data = metrics_HM,
+                               family = binomial(link = "logit"))
+summary(glm_HM_sens_exact_multi)
+glm_HM_sens_exact_multi_AIC <- stepAIC(glm_HM_sens_exact_multi, direction = "both", trace = FALSE)
+glm_HM_sens_exact_multi_AIC_summary <- summary(glm_HM_sens_exact_multi_AIC)
+glm_HM_sens_exact_multi_AIC_coefs <- data.frame(glm_HM_sens_exact_multi_AIC_summary$coefficients)
+glm_HM_sens_exact_multi_AIC_coefs$exp.Estimate <- exp(glm_HM_sens_exact_multi_AIC_coefs$Estimate)
+
+glm_HM_sens_exact_multi_AIC_confint <- confint(glm_HM_sens_exact_multi_AIC)
+glm_HM_sens_exact_multi_AIC_confint <- apply(glm_HM_sens_exact_multi_AIC_confint, 2, exp) %>% as.data.frame()
+glm_HM_sens_exact_multi_AIC_confint <- round(glm_HM_sens_exact_multi_AIC_confint, 4) %>% unite(col = "95%_confint", sep = " - ", remove = TRUE)
+
+glm_HM_sens_exact_multi_AIC_coefs$confint <- glm_HM_sens_exact_multi_AIC_confint
+glm_HM_sens_exact_multi_AIC_coefs <- glm_HM_sens_exact_multi_AIC_coefs[-grep("Intercept", rownames(glm_HM_sens_exact_multi_AIC_coefs)), ]
+write.csv(glm_HM_sens_exact_multi_AIC_coefs, "reg_coefs_sens_exact_HM_multivariable.csv", quote = FALSE)
+
+
+#EIOS
+metrics_EIOS <- metrics_EIOS %>% mutate(sens_exact_cat = ifelse(sens_exact == 0, 0 , 1))
+glm_EIOS_sens_exact <- lapply(10:20, function(x) glm(metrics_EIOS$sens_exact_cat ~ metrics_EIOS[, x], 
+                                                   family = binomial(link = "logit")))
+glm_EIOS_sens_exact_summary <- lapply(glm_EIOS_sens_exact, summary)
+glm_EIOS_sens_exact_coefs <- lapply(glm_EIOS_sens_exact_summary, '[[', "coefficients")
+names(glm_EIOS_sens_exact_coefs) <- names(metrics_EIOS)[10:20]
+glm_EIOS_sens_exact_coef_df <- do.call("rbind", lapply(glm_EIOS_sens_exact_coefs, as.data.frame))
+glm_EIOS_sens_exact_coef_df <- glm_EIOS_sens_exact_coef_df[-grep("Intercept", rownames(glm_EIOS_sens_exact_coef_df)), ]
+glm_EIOS_sens_exact_coef_df$exp.Estimate <- exp(glm_EIOS_sens_exact_coef_df$Estimate)
+
+glm_EIOS_sens_exact_confint <- lapply(glm_EIOS_sens_exact, confint)
+names(glm_EIOS_sens_exact_confint) <- names(metrics_EIOS)[10:20]
+glm_EIOS_sens_exact_confint_df <- do.call("rbind", lapply(glm_EIOS_sens_exact_confint, as.data.frame))
+glm_EIOS_sens_exact_confint_df <- glm_EIOS_sens_exact_confint_df[-grep("Intercept", rownames(glm_EIOS_sens_exact_confint_df)), ]
+glm_EIOS_sens_exact_confint_df <- apply(glm_EIOS_sens_exact_confint_df, 2, exp) %>% as.data.frame()
+glm_EIOS_sens_exact_confint_df <- round(glm_EIOS_sens_exact_confint_df, 4) %>% unite(col = "95%_confint", sep = " - ", remove = TRUE)
+
+glm_EIOS_sens_exact_coef_df$exp.confint <- glm_EIOS_sens_exact_confint_df$`95%_confint`
+write.csv(glm_EIOS_sens_exact_coef_df, "reg_coefs_sens_exact_EIOS_univariable.csv", quote = FALSE)
+
+
+# multivariable
+glm_EIOS_sens_exact_multi <- glm(sens_exact_cat ~ EIOS_total + global_region + english + HDI.2018 + latitude + PFI.2018, 
+                               data = metrics_EIOS,
+                               family = binomial(link = "logit"))
+summary(glm_EIOS_sens_exact_multi)
+glm_EIOS_sens_exact_multi_AIC <- stepAIC(glm_EIOS_sens_exact_multi, direction = "both", trace = FALSE)
+glm_EIOS_sens_exact_multi_AIC_summary <- summary(glm_EIOS_sens_exact_multi_AIC)
+glm_EIOS_sens_exact_multi_AIC_coefs <- data.frame(glm_EIOS_sens_exact_multi_AIC_summary$coefficients)
+glm_EIOS_sens_exact_multi_AIC_coefs$exp.Estimate <- exp(glm_EIOS_sens_exact_multi_AIC_coefs$Estimate)
+
+glm_EIOS_sens_exact_multi_AIC_confint <- confint(glm_EIOS_sens_exact_multi_AIC)
+glm_EIOS_sens_exact_multi_AIC_confint <- apply(glm_EIOS_sens_exact_multi_AIC_confint, 2, exp) %>% as.data.frame()
+glm_EIOS_sens_exact_multi_AIC_confint <- round(glm_EIOS_sens_exact_multi_AIC_confint, 4) %>% unite(col = "95%_confint", sep = " - ", remove = TRUE)
+
+glm_EIOS_sens_exact_multi_AIC_coefs$confint <- glm_EIOS_sens_exact_multi_AIC_confint
+glm_EIOS_sens_exact_multi_AIC_coefs <- glm_EIOS_sens_exact_multi_AIC_coefs[-grep("Intercept", rownames(glm_EIOS_sens_exact_multi_AIC_coefs)), ]
+write.csv(glm_HM_sens_exact_multi_AIC_coefs, "reg_coefs_sens_exact_EIOS_multivariable.csv", quote = FALSE)
 
