@@ -4,6 +4,10 @@ library(dplyr)
 library(tidyr)
 library(RColorBrewer)
 library(binom)
+library(ggrepel)
+library(gridExtra)
+library(grid)
+library(cowplot)
 
 # load epidemic datasets with outbreak indicators
 FluNet_epidemic <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/FluNet_epidemic.csv")
@@ -103,9 +107,92 @@ for (i in seq_along(country_list)) {
   #ggsave(plot = plot, file = paste("FluNet outbreak", country_list[i], ".jpeg", sep=' '))
 }
 
+# comparison plots for all countries
+for (i in seq_along(country_list)) { 
+  FluNet_temp <- filter(FluNet_epidemic, FluNet_epidemic$Country==country_list[i])
+  EIOS_temp <- filter(EIOS_epidemic, country == country_list[i])
+  HM_temp <- filter(HM_epidemic, country == country_list[i])
+  
+  
+  counts_temp <- c(HM_temp$counts, EIOS_temp$counts, FluNet_temp$ALL_INF)
+  source_temp <- c(rep("HealthMap", nrow(HM_temp)), rep("EIOS", nrow(EIOS_temp)), 
+                   rep("FluNet", nrow(FluNet_temp)))
+  country_temp <- rep(country_list[i], nrow(HM_temp) + nrow(EIOS_temp) + nrow(FluNet_temp))
+  date_temp <- c(HM_temp$date, EIOS_temp$date, FluNet_temp$SDATE)
+  epidemic_temp <- c(HM_temp$epidemic, EIOS_temp$epidemic, FluNet_temp$epidemic)
+  
+  temp_df <- data.frame(date_temp, country_temp, counts_temp, source_temp, epidemic_temp)
+  
+  plot <- ggplot(temp_df, aes(x = date_temp, y = counts_temp, col = epidemic_temp)) + 
+    geom_line(aes(group = 1), size = 0.75) + 
+    facet_wrap(facets = ~source_temp, nrow = 3, scales = "free_y", strip.position = "left", 
+               labeller = as_labeller(c(HealthMap = "HealthMap events", EIOS = "EIOS events", FluNet = "FluNet counts"))) +
+    ylab(NULL) +
+    theme(strip.background = element_blank(), strip.placement = "outside") + 
+    labs(title = paste("Comparison of HealthMap, EIOS and FluNet epidemic periods for", country_list[i], sep = " "), 
+         x = "", col = "epidemic period") +
+    scale_x_datetime(date_labels = "%b %Y", date_breaks = "6 months", date_minor_breaks = "2 months") + 
+    scale_color_manual(values = c("#6e6868", "#e64040")) +
+    theme(axis.text.x = element_text(angle = 50, hjust = 1))
+  
+  print(plot)
+  ggsave(plot = plot, file = paste("HM_EIOS_FluNet_epidemic_comparison", country_list[i], ".jpeg", sep=' '))
+}
 
-FluNet_plot <- filter(FluNet_epidemic, Country %in% c("Nigeria", "United States", "Thailand", "Vietnam"))
-FluNet_plot$Country <- factor(FluNet_plot$Country, levels = c("United States", "Nigeria", "Thailand", "Vietnam"))
+# comparison plots for four selected countries
+plot_list <- vector(mode = "list")
+sel_countries <- c("Argentina", "Bulgaria", "Germany", "India", "Nigeria", "United States")
+legend <- get_legend(plot)
+
+for (i in seq_along(sel_countries)) { 
+  FluNet_temp <- filter(FluNet_epidemic, FluNet_epidemic$Country==sel_countries[i])
+  EIOS_temp <- filter(EIOS_epidemic, country == sel_countries[i])
+  HM_temp <- filter(HM_epidemic, country == sel_countries[i])
+  
+  
+  counts_temp <- c(HM_temp$counts, EIOS_temp$counts, FluNet_temp$ALL_INF)
+  source_temp <- c(rep("HealthMap", nrow(HM_temp)), rep("EIOS", nrow(EIOS_temp)), 
+                   rep("FluNet", nrow(FluNet_temp)))
+  country_temp <- rep(country_list[i], nrow(HM_temp) + nrow(EIOS_temp) + nrow(FluNet_temp))
+  date_temp <- c(HM_temp$date, EIOS_temp$date, FluNet_temp$SDATE)
+  epidemic_temp <- c(HM_temp$epidemic, EIOS_temp$epidemic, FluNet_temp$epidemic)
+  
+  temp_df <- data.frame(date_temp, country_temp, counts_temp, source_temp, epidemic_temp)
+  
+  plot_list[[i]] <- ggplot(temp_df, aes(x = date_temp, y = counts_temp, col = epidemic_temp)) + 
+    geom_line(aes(group = 1), size = 0.75) + 
+    facet_wrap(facets = ~source_temp, nrow = 3, scales = "free_y", strip.position = "left", 
+               labeller = as_labeller(c(HealthMap = "HealthMap", EIOS = "EIOS", FluNet = "FluNet"))) +
+    ylab(NULL) +
+    theme(strip.background = element_blank(), strip.placement = "outside") + 
+    labs(title = sel_countries[i], x = "", col = "epidemic period") +
+    scale_x_datetime(date_labels = "%b %Y", date_breaks = "6 months", date_minor_breaks = "2 months") + 
+    scale_color_manual(values = c("#6e6868", "#e64040")) + 
+    theme(legend.position = "none") +
+    theme(axis.text.x = element_text(angle = 50, hjust = 1))
+}
+
+blankPlot <- ggplot()+geom_blank(aes(1,1)) + 
+  cowplot::theme_nothing()
+grid.arrange(plot_list[[1]], plot_list[[2]], blankPlot, plot_list[[3]], plot_list[[4]], legend, 
+             plot_list[[5]], plot_list[[6]], ncol = 3, 
+             top = textGrob("Comparison of HealthMap, EIOS and FluNet epidemic periods", 
+                            gp=gpar(fontsize=18, fontface = "bold")), 
+             widths=c(2.5, 2.5, 0.5))
+ggsave(plot = grid.arrange(plot_list[[1]], plot_list[[2]], blankPlot, plot_list[[3]], plot_list[[4]], legend, 
+                            plot_list[[5]], plot_list[[6]], ncol = 3, 
+                            top = textGrob("Comparison of HealthMap, EIOS and FluNet epidemic periods", 
+                                           gp=gpar(fontsize=18, fontface = "bold")), 
+                            widths=c(2.5, 2.5, 0.5)),
+       filename = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/HM_EIOS_FluNet_epidemic_comp.jpeg",
+       width = 12.5, height = 12)
+
+
+
+
+# FluNet
+FluNet_plot <- filter(FluNet_epidemic, Country %in% c("Nigeria", "Thailand", "Vietnam"))
+#FluNet_plot$Country <- factor(FluNet_plot$Country, levels = c("United States", "Nigeria", "Thailand", "Vietnam"))
 
 ggplot(FluNet_plot, aes(x = SDATE, y = ALL_INF, col = epidemic)) +
   geom_line(aes(group = 1), size = 0.75) +
@@ -114,7 +201,8 @@ ggplot(FluNet_plot, aes(x = SDATE, y = ALL_INF, col = epidemic)) +
        title = paste("WHO FluNet data with epidemic periods", sep = " ")) +
   scale_color_manual(values = c("#6e6868", "#e64040")) + 
   facet_wrap(facets = ~Country, scales = "free_y")
-#ggsave(filename = "FluNet epidemics four countries.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/FluNet")
+ggsave(filename = "FluNet epidemics problem countries.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/FluNet", 
+       width = 10, height = 3.5, unit = "in")
 
 
 HM_plot <- filter(HM_epidemic, country %in% c("Bulgaria", "India", "Nigeria", "United States"))
@@ -130,7 +218,7 @@ ggplot(HM_plot, aes(x = date, y = counts, col = epidemic)) +
 EIOS_plot <- filter(EIOS_epidemic, country %in% c("Bulgaria", "India", "Nigeria", "United States"))
 ggplot(EIOS_plot, aes(x = date, y = counts, col = epidemic)) +
   geom_line(aes(group = 1), size = 0.75) +
-  scale_x_datetime(date_labels = "%b %Y", date_breaks = "2 years") +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 year") +
   labs(x = "", y = "EIOS event counts",
        title = "EIOS data with epidemic periods") +
   scale_color_manual(values = c("#6e6868", "#e64040")) + 
@@ -700,6 +788,37 @@ ggplot(accuracy_long, aes(x = country, y = accuracy, fill = source)) +
   scale_y_continuous(limits = c(0, 1)) +
   scale_fill_brewer(palette = "Set1")
 ggsave(filename = "all_countries_accuracy.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic")
+
+
+accuracy_plot <- ggplot(accuracy_long, aes(x = country, y = accuracy, fill = source)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "Accuracy", y = "Accuracy", x = "") +
+  scale_x_discrete(limits = rev(levels(accuracy_long$country))) +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_fill_brewer(palette = "Set1") +
+  theme(legend.position = "none")
+
+F1_plot <- ggplot(met_ind, aes(x = country, y = F1, fill = source)) +
+  geom_col(position = "dodge") + 
+  coord_flip() + 
+  labs(title = "F1 score", y = "F1 (harmonic mean of sensitivity and PPV)", x = "") +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_x_discrete(limits = rev(levels(met_ind$country))) +
+  scale_fill_brewer(palette = "Set1", limits = rev(levels(met_ind$source))) +
+  theme(legend.position = "none")
+
+legend <- get_legend(F1_plot)
+
+grid.arrange(accuracy_plot, F1_plot, legend, ncol = 3,
+             top = textGrob("EIOS and HealthMap composite performance metrics", gp=gpar(fontsize=18, fontface = "bold")),
+             widths=c(2.5, 2.5, 0.5))
+ggsave(grid.arrange(accuracy_plot, F1_plot, legend, ncol = 3,
+                    top = textGrob("EIOS and HealthMap composite performance metrics", gp=gpar(fontsize=18, fontface = "bold")),
+                    widths=c(2.5, 2.5, 0.5)),
+       filename = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/performance_metrics_composite.jpeg",
+       width = 11.2, height = 4)
+
 
 ##### combine all metrics into one dataframe ##### 
 metrics <- data.frame(sens_per_outbreak_long$country, sens_per_outbreak_long$source, sens_per_outbreak_long$sensitivity, 
