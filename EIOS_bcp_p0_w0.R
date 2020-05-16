@@ -126,7 +126,7 @@ bcp_postprob_list_w <- vector(mode = "list")
 for (i in seq_along(country_list)) { 
   EIOS_temp <- filter(EIOS_byweek, country == country_list[i])
   
-  bcp_list_p <- lapply(p_prior, function(x) bcp(EIOS_temp$counts, p0 = x, burnin = 100, mcmc = 500, w0 = 0.2))
+  bcp_list_p <- lapply(p_prior, function(x) bcp(EIOS_temp$counts, p0 = x, burnin = 100, mcmc = 500, w0 = 0.2, return.mcmc = TRUE))
   bcp_postprob_list_p <- lapply(bcp_list_p, '[[', "posterior.prob")
   bcp_postprob_df_p <- data.frame(matrix(unlist(bcp_postprob_list_p), nrow = 109, byrow = FALSE))
   EIOS_byweek[EIOS_byweek$country == country_list[i], 5:10] <- bcp_postprob_df_p
@@ -136,6 +136,28 @@ for (i in seq_along(country_list)) {
   bcp_postprob_df_w <- data.frame(matrix(unlist(bcp_postprob_list_w), nrow = 109, byrow = FALSE))
   EIOS_byweek[EIOS_byweek$country == country_list[i], 11:16] <- bcp_postprob_df_w
 }
+
+i <- 1
+plot(bcp_list_p[[3]]$posterior.mean)
+points(bcp_list_p[[2]]$posterior.mean, col = "red")
+
+plot(bcp_list_p[[3]]$posterior.prob)
+points(bcp_list_p[[2]]$posterior.prob, col = "red")
+points(bcp_list_p[[1]]$posterior.prob, col = "blue")
+
+par(mfrow = c(1, 2))
+plot(bcp_list_p[[3]]$mcmc.means[, 50], type = "p", main = "Post.mean estimates for time point 50", 
+     xlab = "iteration", ylab = "posterior mean", sub = "600 MCMC iterations, 100 burn-in")
+points(bcp_list_p[[3]]$mcmc.means[, 50], type = "l")
+abline(v = 100, col = "red", lty = 2, lwd = 2)
+
+plot(bcp_list_p[[3]]$mcmc.means[, 88], type = "p", main = "Post.mean estimates for time point 88", 
+     xlab = "iteration", ylab = "posterior mean", sub = "600 MCMC iterations, 100 burn-in")
+points(bcp_list_p[[3]]$mcmc.means[, 88], type = "l")
+abline(v = 100, col = "red", lty = 2, lwd = 2)
+
+
+
 
 
 start_col <- paste("bcp_start", rep(c("p", "w"), each = 6), rep(c(0.05, 0.1, 0.2, 0.3, 0.5, 0.8)), sep = "_")
@@ -152,20 +174,21 @@ for (i in seq_along(country_list)) {
   EIOS_temp <- filter(EIOS_byweek, country == country_list[i] & is.na(EIOS_byweek$p_prior0.05) == FALSE)
   
   # start of epidemics
-  bcp_start_list <- lapply(5:16, function(x) epi_start(EIOS_temp, col = x))
-  bcp_start_df <- data.frame(matrix(unlist(bcp_start_list), nrow = 109, byrow = FALSE))
-  
+  bcp_start_list <- lapply(5:16, function(x) epi_start(EIOS_temp, col = x, cutoff = 0.5))
+  bcp_start_df <- data.frame(matrix(unlist(bcp_start_list), nrow = 108, byrow = FALSE))
+  bcp_start_df[109, ] <- NA
   EIOS_byweek[EIOS_byweek$country == country_list[i], 17:28] <- bcp_start_df
   
   # end of epidemics
-  bcp_end_list <- lapply(5:16, function(x) epi_end(EIOS_temp, col = x))
-  bcp_end_df <- data.frame(matrix(unlist(bcp_end_list), nrow = 109, byrow = FALSE))
+  bcp_end_list <- lapply(5:16, function(x) epi_end(EIOS_temp, col = x, cutoff = 0.5))
+  bcp_end_df <- data.frame(matrix(unlist(bcp_end_list), nrow = 106, byrow = FALSE))
+  bcp_end_df[107:109, ] <- NA
   
   EIOS_byweek[EIOS_byweek$country == country_list[i], 29:40] <- bcp_end_df
 }
 
 # replace all 0 with NA
-EIOS_byweek[17:40] <- sapply(EIOS_byweek[17:40], na_if, 0)
+# EIOS_byweek[17:40] <- sapply(EIOS_byweek[17:40], na_if, 0)
 
 # start end indicator column
 patterns <- paste(rep(c("p", "w"), each = 6), rep(c(0.05, 0.1, 0.2, 0.3, 0.5, 0.8), 2), sep = "_")
@@ -274,6 +297,28 @@ EIOS_epidemic <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_
 EIOS_epidemic$date <- as.POSIXct(EIOS_epidemic$date)
 
 country_list <- levels(FluNet_epidemic$Country)
+
+EIOS_Arg <- filter(EIOS_epidemic, country == "Argentina")
+ggplot(data = EIOS_Arg, aes(x = date)) + 
+  geom_point(aes(y = p_prior0.2, col = "p0 = 0.2, w0 = 0.2")) + 
+  geom_path(aes(y = p_prior0.2, col = "p0 = 0.2, w0 = 0.2")) +
+  geom_point(aes(y = w_prior0.2, col = "w0 = 0.2, p0 = 0.2")) + 
+  geom_path(aes(y = w_prior0.2, col = "w0 = 0.2, p0 = 0.2")) +
+  scale_x_datetime(breaks = "6 months", date_labels = "%b %Y") + 
+  labs(y = "posterior probability", title = "Comparison of posterior probabilities with the same priors") + 
+  theme(legend.title = element_blank())
+
+EIOS_Arg <- filter(EIOS_epidemic, country == "Argentina") %>% 
+  select(country, date, p_prior0.2, w_prior0.2, epidemic_p_0.2, epidemic_w_0.2)
+EIOS_Arg <- EIOS_Arg %>% pivot_longer(cols = c(p_prior0.2, w_prior0.2), names_to = "prior")
+EIOS_Arg$epidemic_p_0.2[EIOS_Arg$prior == "w_prior0.2"] <- NA
+EIOS_Arg$epidemic <- ifelse(is.na(EIOS_Arg$epidemic_p_0.2), EIOS_Arg$epidemic_w_0.2, EIOS_Arg$epidemic_p_0.2)
+ggplot(data = EIOS_Arg, aes(x = date, group = prior, col = epidemic, y = value)) + 
+  geom_path() +
+  scale_x_datetime(breaks = "6 months", date_labels = "%b %Y") + 
+  labs(y = "posterior probability", title = "Comparison of epidemic periods with the same priors") + 
+  theme(legend.title = element_blank()) + 
+  scale_color_manual(values = c("#6e6868", "#e64040"), name = "season", labels = c("non-epidemic", "epidemic"))
 
 # revise startend column of FluNet
 FluNet_epidemic$startend <- NA
@@ -461,15 +506,12 @@ write.csv(metrics_df_EIOS_wide, "D:/Dokumente (D)/McGill/Thesis/SurveillanceData
 ### make plots ###
 metrics_df_EIOS_wide <- read.csv("D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic/EIOS_metrics_bcp_p0_w0.csv")
 
-my_colors <- c("grey", "grey", "red", rep("grey", 5), "blue", "grey", "grey", "grey")
-
 ggplot(metrics_df_EIOS_wide, aes(x = country, y = sens_outbreak, fill = prior)) +
   geom_col(position = "dodge") + 
   coord_flip() + 
   labs(title = "Sensitivity per outbreak of EIOS according to prior choices", y = "Sensitivity per outbreak", x = "") +
   scale_x_discrete(limits = rev(levels(metrics_df_EIOS_wide$country))) +
-  scale_y_continuous(limits = c(0, 1)) +
-  scale_fill_manual(values = my_colors)
+  scale_y_continuous(limits = c(0, 1)) 
 ggsave(filename = "EIOS_sens_per_outbreak_p0_w0.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic")
 
 ggplot(metrics_df_EIOS_wide, aes(x = country, y = sens_week, fill = prior)) +
@@ -477,8 +519,7 @@ ggplot(metrics_df_EIOS_wide, aes(x = country, y = sens_week, fill = prior)) +
   coord_flip() + 
   labs(title = "Sensitivity per week of EIOS according to prior choices", y = "Sensitivity per week", x = "") +
   scale_x_discrete(limits = rev(levels(metrics_df_EIOS_wide$country))) +
-  scale_y_continuous(limits = c(0, 1))  +
-  scale_fill_manual(values = my_colors)
+  scale_y_continuous(limits = c(0, 1)) 
 ggsave(filename = "EIOS_sens_per_week_p0_w0.jpeg", path = "D:/Dokumente (D)/McGill/Thesis/SurveillanceData/data_epidemic")
 
 ggplot(metrics_df_EIOS_wide, aes(x = country, y = 1-FAR, fill = prior)) +
