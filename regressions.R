@@ -568,5 +568,31 @@ glm_EIOS_sens_exact_multi_AIC_confint <- round(glm_EIOS_sens_exact_multi_AIC_con
 
 glm_EIOS_sens_exact_multi_AIC_coefs$confint <- glm_EIOS_sens_exact_multi_AIC_confint
 glm_EIOS_sens_exact_multi_AIC_coefs <- glm_EIOS_sens_exact_multi_AIC_coefs[-grep("Intercept", rownames(glm_EIOS_sens_exact_multi_AIC_coefs)), ]
-write.csv(glm_HM_sens_exact_multi_AIC_coefs, "reg_coefs_sens_exact_EIOS_multivariable.csv", quote = FALSE)
+write.csv(glm_EIOS_sens_exact_multi_AIC_coefs, "reg_coefs_sens_exact_EIOS_multivariable.csv", quote = FALSE)
+
+
+
+
+#### regressions of postprob cutoff #####
+HM_single_cutoff_FAR <- c(1,1,1,0,1,0,0,0,1,0,0,1,1,1,0,1,0,0,0,0,1,1,0,0)
+EIOS_single_cutoff_FAR <- c(1,1,0,0,0,1,0,0,1,1,0,0,1,1,1,0,0,1,0,0,0,1,1,0)
+
+glm_HM_cutoff_FAR <- lapply(10:20, function(x) glm(HM_single_cutoff_FAR ~ metrics_HM[, x], 
+                                                   family = binomial(link = "logit")))
+glm_HM_cutoff_FAR_summary <- lapply(glm_HM_cutoff_FAR, summary)
+glm_HM_cutoff_FAR_coefs <- lapply(glm_HM_cutoff_FAR_summary, '[[', "coefficients")
+names(glm_HM_cutoff_FAR_coefs) <- names(metrics_HM)[10:20]
+glm_HM_cutoff_FAR_coef_df <- do.call("rbind", lapply(glm_HM_cutoff_FAR_coefs, as.data.frame))
+glm_HM_cutoff_FAR_coef_df <- glm_HM_cutoff_FAR_coef_df[-grep("Intercept", rownames(glm_HM_cutoff_FAR_coef_df)), ]
+glm_HM_cutoff_FAR_coef_df$exp.Estimate <- exp(glm_HM_cutoff_FAR_coef_df$Estimate)
+
+
+glm_EIOS_cutoff_FAR <- lapply(10:19, function(x) glm(EIOS_single_cutoff_FAR ~ metrics_EIOS[, x], 
+                                                   family = binomial(link = "logit")))
+glm_EIOS_cutoff_FAR_summary <- lapply(glm_EIOS_cutoff_FAR, summary)
+glm_EIOS_cutoff_FAR_coefs <- lapply(glm_EIOS_cutoff_FAR_summary, '[[', "coefficients")
+names(glm_EIOS_cutoff_FAR_coefs) <- names(metrics_EIOS)[10:19]
+glm_EIOS_cutoff_FAR_coef_df <- do.call("rbind", lapply(glm_EIOS_cutoff_FAR_coefs, as.data.frame))
+glm_EIOS_cutoff_FAR_coef_df <- glm_EIOS_cutoff_FAR_coef_df[-grep("Intercept", rownames(glm_EIOS_cutoff_FAR_coef_df)), ]
+glm_EIOS_cutoff_FAR_coef_df$exp.Estimate <- exp(glm_EIOS_cutoff_FAR_coef_df$Estimate)
 
